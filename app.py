@@ -20,17 +20,16 @@ client = gspread.authorize(creds)
 
 SHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
+# ✅ OPEN SPREADSHEET
 spreadsheet = client.open_by_key(SHEET_ID)
 
-# -----------------------------
-# SHEETS
-# -----------------------------
+# ✅ CORRECT SHEETS
 response_sheet = spreadsheet.worksheet("Responses")
 basket1_sheet = spreadsheet.worksheet("Sheet1")
 basket2_sheet = spreadsheet.worksheet("Sheet2")
 
 # -----------------------------
-# CREATE HEADER IF NOT EXISTS
+# CREATE HEADER (SAFE)
 # -----------------------------
 headers = [
     "EmpID", "Name", "Designation",
@@ -47,22 +46,22 @@ if first_row != headers:
     response_sheet.update('A1:Q1', [headers])
 
 # -----------------------------
-# LOAD COURSE DATA
+# LOAD COURSES FROM GOOGLE SHEETS
 # -----------------------------
 b1_df = pd.DataFrame(basket1_sheet.get_all_records())
 b2_df = pd.DataFrame(basket2_sheet.get_all_records())
 
-# Clean column names
+# Clean column names (important)
 b1_df.columns = b1_df.columns.str.strip()
 b2_df.columns = b2_df.columns.str.strip()
 
-# Validate columns
+# Validate structure
 if "Course" not in b1_df.columns or "Count" not in b1_df.columns:
-    st.error("Sheet1 must have columns: Course, Count")
+    st.error("Sheet1 must contain columns: Course, Count")
     st.stop()
 
 if "Course" not in b2_df.columns or "Count" not in b2_df.columns:
-    st.error("Sheet2 must have columns: Course, Count")
+    st.error("Sheet2 must contain columns: Course, Count")
     st.stop()
 
 # Filter available courses
