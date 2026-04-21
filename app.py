@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
+import time
 
-st.title("Faculty Preferences for Summer 2025-2026")
+st.title("Faculty Preferences System (Stable Version)")
 
 # -----------------------------
-# GOOGLE CLIENT (SAFE)
+# GOOGLE CLIENT
 # -----------------------------
 @st.cache_resource
 def get_client():
@@ -24,47 +25,35 @@ def get_client():
 
 
 @st.cache_resource
-def get_spreadsheet():
+def get_sheet():
     client = get_client()
     return client.open_by_key("1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg")
 
 
-spreadsheet = get_spreadsheet()
+spreadsheet = get_sheet()
 
 # -----------------------------
-# SAFE SHEET ACCESS (FIXED)
+# SAFE INDEX-BASED SHEETS
 # -----------------------------
 response_sheet = spreadsheet.get_worksheet(0)
 basket1_sheet  = spreadsheet.get_worksheet(1)
 basket2_sheet  = spreadsheet.get_worksheet(2)
 
-# Debug
-st.write("Available sheets:")
-st.write([ws.title for ws in spreadsheet.worksheets()])
+# -----------------------------
+# CACHE EXISTING IDS (FIX API SPAM)
+# -----------------------------
+@st.cache_data(ttl=60)
+def get_existing_ids():
+    return response_sheet.col_values(1)
+
+existing_ids = get_existing_ids()
 
 # -----------------------------
-# HEADER CHECK
+# SAFE COURSE LOADER
 # -----------------------------
-headers = [
-    "EmpID", "Name", "Designation",
-    "BS1P1","BS1P2","BS1P3","BS1P4","BS1P5","BS1P6","BS1P7",
-    "BS2P1","BS2P2","BS2P3","BS2P4","BS2P5","BS2P6","BS2P7"
-]
-
-try:
-    first_row = response_sheet.row_values(1)
-except:
-    first_row = []
-
-if first_row != headers:
-    response_sheet.update('A1:Q1', [headers])
-
-# -----------------------------
-# SAFE DATA LOADER (FIXED)
-# -----------------------------
-@st.cache_data
-def load_courses(sheet_index):
-    sheet = spreadsheet.get_worksheet(sheet_index)
+@st.cache_data(ttl=60)
+def load_courses(index):
+    sheet = spreadsheet.get_worksheet(index)
     df = pd.DataFrame(sheet.get_all_records())
     df.columns = df.columns.str.strip()
     return df
@@ -72,53 +61,93 @@ def load_courses(sheet_index):
 b1_df = load_courses(1)
 b2_df = load_courses(2)
 
-if "Course" not in b1_df.columns or "Count" not in b1_df.columns:
-    st.error("Sheet1 must contain Course, Count")
-    st.stop()
-
-if "Course" not in b2_df.columns or "Count" not in b2_df.columns:
-    st.error("Sheet2 must contain Course, Count")
-    st.stop()
-
 basket1 = b1_df[b1_df["Count"] > 0]["Course"].tolist()
 basket2 = b2_df[b2_df["Count"] > 0]["Course"].tolist()
 
 # -----------------------------
-# EMP DATA
+# EMPLOYEE INPUT
 # -----------------------------
-employees = pd.read_excel("employees.xlsx")
+emp_id = st.text_input("Employee ID")
 
-emp_id = st.text_input("Enter Employee ID")
+# -----------------------------
+# SUBMISSION LOCK (CRITICAL FIX)
+# -----------------------------
+if "submitted" not in st.session_state:
+    st.session_state.submitted = False
 
-name = ""
-designation = ""
+# prevent rerun double submit
+if st.session_state.submitted:
+    st.success("Already submitted in this session.")
+    st.stop()
 
-if emp_id:
+# -----------------------------
+# DUPLICATE CHECK
+# -----------------------------
+if emp_id and emp_id in existing_ids:
+    st.warning("Already submitted in Google Sheet")
+    st.stop()
+
+# -----------------------------
+# EMP DATA (OPTIONAL FILE)
+# -----------------------------
+try:
+    employees = pd.read_excel("employees.xlsx")
+except:
+    employees = pd.DataFrame()
+
+name, designation = "", ""
+
+if emp_id and not employees.empty:
     emp_row = employees[employees["EmpID"].astype(str) == emp_id]
 
     if not emp_row.empty:
         name = emp_row.iloc[0]["Name"]
         designation = emp_row.iloc[0]["Designation"]
         st.success("Employee Found")
-    else:
-        st.error("Invalid Employee ID")
 
 # -----------------------------
-# DUPLICATE CHECK
+# UI SELECTION
 # -----------------------------
-existing_ids = response_sheet.col_values(1)
+if emp_id:
 
-if emp_id and emp_id in existing_ids:
-    st.warning("Already submitted")
-    st.stop()
+    st.subheader("Basket 1")
+    b1_temp = basket1.copy()
+    basket1_pref = []
+
+    for i in range(7):
+        choice = st.selectbox(
+            f"B1P{i+1}",
+            ["Select"] + b1_temp,
+            key=f"b1_{i}"
+        )
+        if choice != "Select":
+            basket1_pref.append(choice)
+            if choice in b1_temp:
+                b1_temp.remove(choice)
+
+    st.subheader("Basket 2")
+    b2_temp = basket2.copy()
+    basket2_pref = []
+
+    for i in range(7):
+        choice = st.selectbox(
+            f"B2P{i+1}",
+            ["Select"] + b2_temp,
+            key=f"b2_{i}"
+        )
+        if choice != "Select":
+            basket2_pref.append(choice)
+            if choice in b2_temp:
+                b2_temp.remove(choice)
 
 # -----------------------------
-# DECREMENT SAFE
+# SAFE DECREMENT WITH RETRY
 # -----------------------------
-def decrement(sheet, course):
+def safe_decrement(sheet, course):
     try:
         cell = sheet.find(course)
         row = cell.row
+
         count = int(sheet.cell(row, 2).value)
 
         if count <= 0:
@@ -126,66 +155,50 @@ def decrement(sheet, course):
 
         sheet.update_cell(row, 2, count - 1)
         return True
-    except:
+
+    except Exception:
+        time.sleep(1)
         return False
 
 # -----------------------------
-# UI
+# SUBMIT (CRASH PROOF)
 # -----------------------------
-if name:
+if st.button("Submit"):
 
-    st.subheader("Basket 1 Preferences")
-    basket1_pref = []
-    temp1 = basket1.copy()
+    if len(basket1_pref) != 7 or len(basket2_pref) != 7:
+        st.error("Select all 7 preferences")
+        st.stop()
 
-    for i in range(1, 8):
-        choice = st.selectbox(
-            f"BS1P{i}",
-            ["Select"] + temp1,
-            key=f"b1{i}"
-        )
+    try:
+        # LOCK (prevents rerun double submit)
+        st.session_state.submitted = True
 
-        if choice != "Select":
-            basket1_pref.append(choice)
-            if choice in temp1:
-                temp1.remove(choice)
-
-    st.subheader("Basket 2 Preferences")
-    basket2_pref = []
-    temp2 = basket2.copy()
-
-    for i in range(1, 8):
-        choice = st.selectbox(
-            f"BS2P{i}",
-            ["Select"] + temp2,
-            key=f"b2{i}"
-        )
-
-        if choice != "Select":
-            basket2_pref.append(choice)
-            if choice in temp2:
-                temp2.remove(choice)
-
-    if st.button("Submit Preference"):
-
-        if len(basket1_pref) != 7 or len(basket2_pref) != 7:
-            st.error("Select all 7 preferences")
-            st.stop()
-
+        # decrement basket 1
         for c in basket1_pref:
-            if not decrement(basket1_sheet, c):
+            if not safe_decrement(basket1_sheet, c):
+                st.session_state.submitted = False
                 st.error(f"{c} full in Basket 1")
                 st.stop()
 
+        # decrement basket 2
         for c in basket2_pref:
-            if not decrement(basket2_sheet, c):
+            if not safe_decrement(basket2_sheet, c):
+                st.session_state.submitted = False
                 st.error(f"{c} full in Basket 2")
                 st.stop()
 
+        # append row
         response_sheet.append_row([
             emp_id, name, designation,
-            *basket1_pref, *basket2_pref
+            *basket1_pref,
+            *basket2_pref
         ])
 
+        # refresh cache
         st.cache_data.clear()
+
         st.success("Submitted Successfully")
+
+    except Exception as e:
+        st.session_state.submitted = False
+        st.error(f"Submission failed: {e}")
