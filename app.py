@@ -53,16 +53,17 @@ if first_row != headers:
     response_sheet.update('A1:Q1', [headers])
 
 # -----------------------------
-# CACHE COURSE DATA
+# CACHE COURSE DATA (FIXED)
 # -----------------------------
 @st.cache_data
-def load_courses(sheet):
+def load_courses(sheet_name):
+    sheet = spreadsheet.worksheet(sheet_name)
     df = pd.DataFrame(sheet.get_all_records())
     df.columns = df.columns.str.strip()
     return df
 
-b1_df = load_courses(basket1_sheet)
-b2_df = load_courses(basket2_sheet)
+b1_df = load_courses("Sheet1")
+b2_df = load_courses("Sheet2")
 
 # Validate columns
 if "Course" not in b1_df.columns or "Count" not in b1_df.columns:
@@ -199,5 +200,8 @@ if name != "":
         ]
 
         response_sheet.append_row(row)
+
+        # CLEAR CACHE → refresh course counts
+        st.cache_data.clear()
 
         st.success("Preference Submitted Successfully")
