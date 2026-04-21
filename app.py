@@ -6,24 +6,31 @@ from google.oauth2.service_account import Credentials
 st.title("Faculty Preferences for Summer 2025-2026")
 
 # -----------------------------
-# GOOGLE SHEETS CONNECTION
+# CACHED GOOGLE CONNECTION
 # -----------------------------
-scope = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
+@st.cache_resource
+def get_gspread_client():
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"], scopes=scope
+    )
+    return gspread.authorize(creds)
 
-creds = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"], scopes=scope
-)
-client = gspread.authorize(creds)
 
-SHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
+@st.cache_resource
+def get_spreadsheet():
+    client = get_gspread_client()
+    return client.open_by_key("1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg")
 
-# ✅ OPEN SPREADSHEET
-spreadsheet = client.open_by_key(SHEET_ID)
 
-# ✅ CORRECT SHEETS
+# -----------------------------
+# LOAD SHEETS
+# -----------------------------
+spreadsheet = get_spreadsheet()
+
 response_sheet = spreadsheet.worksheet("Responses")
 basket1_sheet = spreadsheet.worksheet("Sheet1")
 basket2_sheet = spreadsheet.worksheet("Sheet2")
@@ -46,16 +53,18 @@ if first_row != headers:
     response_sheet.update('A1:Q1', [headers])
 
 # -----------------------------
-# LOAD COURSES FROM GOOGLE SHEETS
+# CACHE COURSE DATA
 # -----------------------------
-b1_df = pd.DataFrame(basket1_sheet.get_all_records())
-b2_df = pd.DataFrame(basket2_sheet.get_all_records())
+@st.cache_data
+def load_courses(sheet):
+    df = pd.DataFrame(sheet.get_all_records())
+    df.columns = df.columns.str.strip()
+    return df
 
-# Clean column names (important)
-b1_df.columns = b1_df.columns.str.strip()
-b2_df.columns = b2_df.columns.str.strip()
+b1_df = load_courses(basket1_sheet)
+b2_df = load_courses(basket2_sheet)
 
-# Validate structure
+# Validate columns
 if "Course" not in b1_df.columns or "Count" not in b1_df.columns:
     st.error("Sheet1 must contain columns: Course, Count")
     st.stop()
@@ -192,5 +201,3 @@ if name != "":
         response_sheet.append_row(row)
 
         st.success("Preference Submitted Successfully")
-
-
