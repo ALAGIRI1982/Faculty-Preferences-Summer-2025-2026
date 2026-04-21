@@ -34,6 +34,8 @@ spreadsheet = get_spreadsheet()
 response_sheet = spreadsheet.worksheet("Responses")
 basket1_sheet = spreadsheet.worksheet("Sheet1")
 basket2_sheet = spreadsheet.worksheet("Sheet2")
+st.write("Available sheets:")
+st.write([ws.title for ws in spreadsheet.worksheets()])
 
 # -----------------------------
 # CREATE HEADER (SAFE)
