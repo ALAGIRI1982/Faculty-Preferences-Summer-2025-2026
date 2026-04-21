@@ -1,4 +1,4 @@
-import streamlit as st
+'''import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
@@ -191,4 +191,31 @@ if name != "":
 
         response_sheet.append_row(row)
 
-        st.success("Preference Submitted Successfully")
+        st.success("Preference Submitted Successfully")'''
+import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
+
+scope = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+creds = Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"], scopes=scope
+)
+
+client = gspread.authorize(creds)
+
+SHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
+
+try:
+    spreadsheet = client.open_by_key(SHEET_ID)
+    st.success("✅ Connected Successfully")
+
+    for ws in spreadsheet.worksheets():
+        st.write(ws.title)
+
+except Exception as e:
+    st.error("❌ Failed")
+    st.write(e)
