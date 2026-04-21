@@ -20,15 +20,17 @@ client = gspread.authorize(creds)
 
 SHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
-# Main sheet (responses)
-sheet = client.open_by_key(SHEET_ID).sheet1
-
-# Basket sheets
-basket1_sheet = client.open_by_key(SHEET_ID).worksheet("Sheet1")
-basket2_sheet = client.open_by_key(SHEET_ID).worksheet("Sheet2")
+spreadsheet = client.open_by_key(SHEET_ID)
 
 # -----------------------------
-# CREATE HEADER AUTOMATICALLY
+# SHEETS
+# -----------------------------
+response_sheet = spreadsheet.worksheet("Responses")
+basket1_sheet = spreadsheet.worksheet("Sheet1")
+basket2_sheet = spreadsheet.worksheet("Sheet2")
+
+# -----------------------------
+# CREATE HEADER IF NOT EXISTS
 # -----------------------------
 headers = [
     "EmpID", "Name", "Designation",
@@ -36,27 +38,44 @@ headers = [
     "BS2P1","BS2P2","BS2P3","BS2P4","BS2P5","BS2P6","BS2P7"
 ]
 
-first_row = sheet.row_values(1)
+try:
+    first_row = response_sheet.row_values(1)
+except:
+    first_row = []
+
 if first_row != headers:
-    sheet.update('A1:Q1', [headers])
+    response_sheet.update('A1:Q1', [headers])
 
 # -----------------------------
-# LOAD COURSE DATA FROM GOOGLE SHEETS
+# LOAD COURSE DATA
 # -----------------------------
 b1_df = pd.DataFrame(basket1_sheet.get_all_records())
 b2_df = pd.DataFrame(basket2_sheet.get_all_records())
 
-# Only available courses
+# Clean column names
+b1_df.columns = b1_df.columns.str.strip()
+b2_df.columns = b2_df.columns.str.strip()
+
+# Validate columns
+if "Course" not in b1_df.columns or "Count" not in b1_df.columns:
+    st.error("Sheet1 must have columns: Course, Count")
+    st.stop()
+
+if "Course" not in b2_df.columns or "Count" not in b2_df.columns:
+    st.error("Sheet2 must have columns: Course, Count")
+    st.stop()
+
+# Filter available courses
 basket1 = b1_df[b1_df["Count"] > 0]["Course"].tolist()
 basket2 = b2_df[b2_df["Count"] > 0]["Course"].tolist()
 
 # -----------------------------
-# LOAD EMPLOYEE DATA (LOCAL EXCEL OK)
+# LOAD EMPLOYEE DATA
 # -----------------------------
 employees = pd.read_excel("employees.xlsx")
 
 # -----------------------------
-# EMPLOYEE ID INPUT
+# EMPLOYEE INPUT
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
@@ -75,9 +94,10 @@ if emp_id:
         st.error("Invalid Employee ID")
 
 # -----------------------------
-# PREVENT DUPLICATE SUBMISSION
+# DUPLICATE CHECK
 # -----------------------------
-existing_ids = sheet.col_values(1)
+existing_ids = response_sheet.col_values(1)
+
 if emp_id and emp_id in existing_ids:
     st.warning("You have already submitted your preferences")
     st.stop()
@@ -86,21 +106,21 @@ if emp_id and emp_id in existing_ids:
 # DECREMENT FUNCTION
 # -----------------------------
 def decrement(sheet_obj, course):
-    cell = sheet_obj.find(course)
-    if not cell:
+    try:
+        cell = sheet_obj.find(course)
+        row = cell.row
+        count = int(sheet_obj.cell(row, 2).value)
+
+        if count <= 0:
+            return False
+
+        sheet_obj.update_cell(row, 2, count - 1)
+        return True
+    except:
         return False
-
-    row = cell.row
-    count = int(sheet_obj.cell(row, 2).value)
-
-    if count <= 0:
-        return False
-
-    sheet_obj.update_cell(row, 2, count - 1)
-    return True
 
 # -----------------------------
-# UI FOR SELECTION
+# UI
 # -----------------------------
 if name != "":
 
@@ -137,11 +157,10 @@ if name != "":
                 available_courses2.remove(choice)
 
     # -----------------------------
-    # SUBMIT BUTTON
+    # SUBMIT
     # -----------------------------
     if st.button("Submit Preference"):
 
-        # Validation
         if len(basket1_pref) != 7:
             st.error("Please select 7 courses in Basket 1")
             st.stop()
@@ -162,7 +181,7 @@ if name != "":
                 st.error(f"{course} is full in Basket 2")
                 st.stop()
 
-        # Save Data
+        # Save Response
         row = [
             emp_id,
             name,
@@ -171,6 +190,6 @@ if name != "":
             *basket2_pref
         ]
 
-        sheet.append_row(row)
+        response_sheet.append_row(row)
 
         st.success("Preference Submitted Successfully")
