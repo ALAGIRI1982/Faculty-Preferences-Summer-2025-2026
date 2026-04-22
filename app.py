@@ -56,12 +56,45 @@ basket1 = b1_df["Course"].tolist()
 basket2 = b2_df["Course"].tolist()
 
 # -----------------------------
-# EMP ID
+# FACULTY LIST SHEET
 # -----------------------------
-emp_id = st.text_input("Enter Employee ID")
+@st.cache_data(ttl=60)
+def load_faculty_master():
+    sheet = ss.worksheet("Faculty List")
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+
+    # cleanup (important)
+    df["EmpID"] = df["EmpID"].astype(str).str.strip()
+    return df
+
+faculty_df = load_faculty_master()
 
 # -----------------------------
-# UI
+# EMP ID INPUT
+# -----------------------------
+emp_id = st.text_input("Enter Employee ID").strip()
+
+name = ""
+designation = ""
+
+if emp_id:
+    match = faculty_df[faculty_df["EmpID"] == emp_id]
+
+    if not match.empty:
+        name = match.iloc[0]["Name"]
+        designation = match.iloc[0]["Designation"]
+    else:
+        st.warning("❌ Employee ID not found in Faculty List")
+
+# -----------------------------
+# DISPLAY FACULTY DETAILS
+# -----------------------------
+st.text_input("Name", value=name, disabled=True)
+st.text_input("Designation", value=designation, disabled=True)
+
+# -----------------------------
+# UI COLUMNS
 # -----------------------------
 col1, col2 = st.columns(2)
 
@@ -112,18 +145,24 @@ with col2:
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
+    if not emp_id or not name:
+        st.error("❌ Enter valid Employee ID first")
+        st.stop()
+
     if len(b1_selected) != 7 or len(b2_selected) != 7:
-        st.error("Select exactly 7 unique courses in each basket")
+        st.error("❌ Select exactly 7 unique courses in each basket")
         st.stop()
 
     try:
         response_sheet.append_row([
             emp_id,
+            name,
+            designation,
             *b1_selected,
             *b2_selected
         ])
 
-        st.success("✅ Submitted Successfully")
+        st.success("✅ Preferences Submitted Successfully!")
 
     except Exception as e:
         st.error(f"Error: {e}")
