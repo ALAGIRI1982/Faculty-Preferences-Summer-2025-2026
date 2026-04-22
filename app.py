@@ -4,15 +4,15 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # -----------------------------
-# PAGE CONFIG
+# CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Fully Fixed Version)")
+st.title("📊 Faculty Preference System (Fully Stable)")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
 # -----------------------------
-# GOOGLE AUTH
+# GOOGLE AUTH (CACHED)
 # -----------------------------
 @st.cache_resource
 def get_client():
@@ -30,7 +30,7 @@ def get_client():
 client = get_client()
 
 # -----------------------------
-# SAFE SPREADSHEET LOADER (IMPORTANT FIX)
+# SAFE SPREADSHEET OPEN (FIXED CRASH POINT)
 # -----------------------------
 @st.cache_resource
 def get_spreadsheet():
@@ -38,16 +38,21 @@ def get_spreadsheet():
 
 ss = get_spreadsheet()
 
-response_sheet = ss.get_worksheet(0)
-basket1_sheet = ss.get_worksheet(1)
-basket2_sheet = ss.get_worksheet(2)
+# -----------------------------
+# SAFE WORKSHEET LOADER (IMPORTANT FIX)
+# -----------------------------
+@st.cache_resource
+def get_sheets():
+    sheets = ss.worksheets()
+    return sheets[0], sheets[1], sheets[2]
+
+response_sheet, basket1_sheet, basket2_sheet = get_sheets()
 
 # -----------------------------
-# LOAD GOOGLE SHEETS DATA (CACHED)
+# LOAD DATA (CACHED)
 # -----------------------------
 @st.cache_data(ttl=60)
-def load_sheet(index):
-    sheet = ss.get_worksheet(index)
+def load_sheet(sheet):
     data = sheet.get_all_values()
     return pd.DataFrame(data[1:], columns=data[0])
 
@@ -57,53 +62,18 @@ def ensure_usage(df):
     df["Usage"] = pd.to_numeric(df["Usage"], errors="coerce").fillna(0).astype(int)
     return df
 
-b1_df = ensure_usage(load_sheet(1))
-b2_df = ensure_usage(load_sheet(2))
-
-# -----------------------------
-# EMPLOYEE DATA LOADER (FIXED)
-# -----------------------------
-@st.cache_data
-def load_employees():
-    df = pd.read_excel("employees.xlsx")
-
-    # clean column names
-    df.columns = df.columns.str.strip()
-
-    # normalize EmpID
-    df["EmpID"] = df["EmpID"].astype(str).str.strip()
-
-    return df
-
-employees = load_employees()
+b1_df = ensure_usage(load_sheet(basket1_sheet))
+b2_df = ensure_usage(load_sheet(basket2_sheet))
 
 # -----------------------------
 # EMPLOYEE INPUT
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
-name = ""
-designation = ""
-
-if emp_id:
-    emp_id = str(emp_id).strip()
-
-    emp_row = employees[employees["EmpID"] == emp_id]
-
-    if not emp_row.empty:
-        name = emp_row.iloc[0]["Name"]
-        designation = emp_row.iloc[0]["Designation"]
-        st.success(f"Employee Found: {name} ({designation})")
-    else:
-        st.warning("Employee ID not found")
-
-# -----------------------------
-# DUPLICATE CHECK
-# -----------------------------
 existing_ids = response_sheet.col_values(1)
 
 if emp_id and emp_id in existing_ids:
-    st.warning("Already submitted preferences")
+    st.warning("Already submitted")
     st.stop()
 
 first_time = len(existing_ids) <= 1
@@ -166,7 +136,7 @@ with col2:
 # -----------------------------
 # BULK UPDATE (NO QUOTA ERROR)
 # -----------------------------
-def update_usage(sheet, selected_courses):
+def update_usage(sheet, selected):
     data = sheet.get_all_values()
 
     headers = data[0]
@@ -180,7 +150,7 @@ def update_usage(sheet, selected_courses):
     for r in rows:
         usage_map[r[c_idx]] = int(r[u_idx]) if r[u_idx] else 0
 
-    for c in selected_courses:
+    for c in selected:
         usage_map[c] = usage_map.get(c, 0) + 1
 
     updated_col = [[usage_map[r[c_idx]]] for r in rows]
@@ -193,7 +163,7 @@ def update_usage(sheet, selected_courses):
     )
 
 # -----------------------------
-# SUBMIT BUTTON
+# SUBMIT
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
@@ -207,8 +177,6 @@ if st.button("🚀 Submit Preferences"):
 
         response_sheet.append_row([
             emp_id,
-            name,
-            designation,
             *b1_selected,
             *b2_selected
         ])
