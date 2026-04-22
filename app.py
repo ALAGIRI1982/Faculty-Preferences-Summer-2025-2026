@@ -4,15 +4,15 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # -----------------------------
-# CONFIG
+# PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Fully Stable)")
+st.title("📊 Faculty Preference System (Stable Final Version)")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
 # -----------------------------
-# GOOGLE AUTH (CACHED)
+# GOOGLE AUTH (CACHE SAFE)
 # -----------------------------
 @st.cache_resource
 def get_client():
@@ -30,7 +30,7 @@ def get_client():
 client = get_client()
 
 # -----------------------------
-# SAFE SPREADSHEET OPEN (FIXED CRASH POINT)
+# SAFE SPREADSHEET (CACHE RESOURCE)
 # -----------------------------
 @st.cache_resource
 def get_spreadsheet():
@@ -39,31 +39,32 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# SAFE WORKSHEET LOADER (IMPORTANT FIX)
-# -----------------------------
-@st.cache_resource
-def get_sheets():
-    sheets = ss.worksheets()
-    return sheets[0], sheets[1], sheets[2]
-
-response_sheet, basket1_sheet, basket2_sheet = get_sheets()
-
-# -----------------------------
-# LOAD DATA (CACHED)
+# SAFE SHEET LOADER (FIXED - NO UNHASHABLE ERROR)
 # -----------------------------
 @st.cache_data(ttl=60)
-def load_sheet(sheet):
+def load_sheet(sheet_index):
+    sheet = ss.get_worksheet(sheet_index)
     data = sheet.get_all_values()
     return pd.DataFrame(data[1:], columns=data[0])
 
+# -----------------------------
+# ENSURE USAGE COLUMN
+# -----------------------------
 def ensure_usage(df):
     if "Usage" not in df.columns:
         df["Usage"] = 0
     df["Usage"] = pd.to_numeric(df["Usage"], errors="coerce").fillna(0).astype(int)
     return df
 
-b1_df = ensure_usage(load_sheet(basket1_sheet))
-b2_df = ensure_usage(load_sheet(basket2_sheet))
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+b1_df = ensure_usage(load_sheet(1))
+b2_df = ensure_usage(load_sheet(2))
+
+response_sheet = ss.get_worksheet(0)
+basket1_sheet = ss.get_worksheet(1)
+basket2_sheet = ss.get_worksheet(2)
 
 # -----------------------------
 # EMPLOYEE INPUT
@@ -79,7 +80,7 @@ if emp_id and emp_id in existing_ids:
 first_time = len(existing_ids) <= 1
 
 # -----------------------------
-# COURSE LOGIC
+# COURSE SELECTION LOGIC
 # -----------------------------
 def get_courses(df):
     if first_time:
