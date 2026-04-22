@@ -37,7 +37,6 @@ def get_spreadsheet():
     return client.open_by_key(SPREADSHEET_ID)
 
 ss = get_spreadsheet()
-
 response_sheet = ss.get_worksheet(0)
 
 # -----------------------------
@@ -49,8 +48,6 @@ def load_sheet(index):
     data = sheet.get_all_values()
 
     df = pd.DataFrame(data[1:], columns=data[0])
-
-    # clean headers
     df.columns = df.columns.str.strip()
 
     return df
@@ -63,7 +60,7 @@ b2_df = load_sheet(2)   # Basket 2
 faculty_df = load_sheet(3)  # Faculty List
 
 # -----------------------------
-# SAFE COURSE EXTRACTION
+# GET COURSE LIST
 # -----------------------------
 def get_course_list(df):
     course_col = None
@@ -156,7 +153,7 @@ with col2:
                 available_b2.remove(choice)
 
 # -----------------------------
-# SUBMIT
+# SUBMIT (WITH DUPLICATE CHECK)
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
@@ -169,6 +166,24 @@ if st.button("🚀 Submit Preferences"):
         st.stop()
 
     try:
+        # -----------------------------
+        # CHECK EXISTING EMPLOYEE ID
+        # -----------------------------
+        existing_data = response_sheet.get_all_values()
+
+        existing_emp_ids = [
+            row[0].strip()
+            for row in existing_data[1:]
+            if row and len(row) > 0
+        ]
+
+        if emp_id in existing_emp_ids:
+            st.warning("⚠️ Preferences already submitted. Only one submission allowed per faculty.")
+            st.stop()
+
+        # -----------------------------
+        # INSERT DATA
+        # -----------------------------
         response_sheet.append_row([
             emp_id,
             name,
