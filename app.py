@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 # CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Stable Production Version)")
+st.title("📊 Faculty Preference System (Quota Safe Version)")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
@@ -29,28 +29,22 @@ def get_client():
 
 client = get_client()
 
-# -----------------------------
-# LOAD SHEET (FIXED - NO UNHASHABLE ERROR)
-# -----------------------------
-@st.cache_data(ttl=60)
-def load_sheet(sheet_index):
-    ss = client.open_by_key(SPREADSHEET_ID)
-    sheet = ss.get_worksheet(sheet_index)
-
-    data = sheet.get_all_values()
-    df = pd.DataFrame(data[1:], columns=data[0])
-    return df
-
-# -----------------------------
-# SHEETS
-# -----------------------------
 ss = client.open_by_key(SPREADSHEET_ID)
 response_sheet = ss.get_worksheet(0)
 basket1_sheet = ss.get_worksheet(1)
 basket2_sheet = ss.get_worksheet(2)
 
 # -----------------------------
-# ENSURE USAGE COLUMN
+# SAFE LOADER (NO API OVERLOAD)
+# -----------------------------
+@st.cache_data(ttl=60)
+def load_sheet(index):
+    sheet = ss.get_worksheet(index)
+    data = sheet.get_all_values()
+    return pd.DataFrame(data[1:], columns=data[0])
+
+# -----------------------------
+# INIT USAGE COLUMN
 # -----------------------------
 def ensure_usage(df):
     if "Usage" not in df.columns:
@@ -59,7 +53,7 @@ def ensure_usage(df):
     return df
 
 # -----------------------------
-# LOAD DATA (CACHED SAFE)
+# LOAD DATA
 # -----------------------------
 b1_df = ensure_usage(load_sheet(1))
 b2_df = ensure_usage(load_sheet(2))
@@ -67,26 +61,25 @@ b2_df = ensure_usage(load_sheet(2))
 # -----------------------------
 # SYSTEM STATE
 # -----------------------------
-existing_ids = response_sheet.col_values(1)
-first_time = len(existing_ids) <= 1
+existing = response_sheet.col_values(1)
+first_time = len(existing) <= 1
 
 # -----------------------------
 # EMPLOYEE ID
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
-if emp_id and emp_id in existing_ids:
+if emp_id and emp_id in existing:
     st.warning("Already submitted")
     st.stop()
 
 # -----------------------------
-# GET COURSE LIST
+# COURSE SELECTION LOGIC
 # -----------------------------
-def get_courses(df, first):
-    if first:
+def get_courses(df):
+    if first_time:
         return df["Course"].tolist()
-    else:
-        return df.sort_values("Usage")["Course"].head(7).tolist()
+    return df.sort_values("Usage")["Course"].head(7).tolist()
 
 # -----------------------------
 # UI
@@ -99,7 +92,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("📘 Basket 1")
 
-    b1_list = get_courses(b1_df, first_time)
+    b1_list = get_courses(b1_df)
     b1_selected = []
 
     for i in range(7):
@@ -120,7 +113,7 @@ with col1:
 with col2:
     st.subheader("📗 Basket 2")
 
-    b2_list = get_courses(b2_df, first_time)
+    b2_list = get_courses(b2_df)
     b2_selected = []
 
     for i in range(7):
@@ -136,23 +129,36 @@ with col2:
                 b2_list.remove(choice)
 
 # -----------------------------
-# UPDATE USAGE (SAFE WRITE)
+# ⚡ BULK UPDATE (NO QUOTA ERROR)
 # -----------------------------
 def update_usage(sheet, df, selected):
-    for course in selected:
-        try:
-            idx = df.index[df["Course"] == course][0]
-            new_val = int(df.loc[idx, "Usage"]) + 1
-            df.loc[idx, "Usage"] = new_val
+    data = sheet.get_all_values()
 
-            cell = sheet.find(course)
-            row = cell.row
-            col = df.columns.get_loc("Usage") + 1
+    headers = data[0]
+    rows = data[1:]
 
-            sheet.update_cell(row, col, new_val)
+    c_idx = headers.index("Course")
+    u_idx = headers.index("Usage")
 
-        except Exception as e:
-            st.error(f"Error updating {course}: {e}")
+    usage_map = {}
+
+    # current usage
+    for r in rows:
+        usage_map[r[c_idx]] = int(r[u_idx]) if r[u_idx] else 0
+
+    # update locally
+    for c in selected:
+        usage_map[c] = usage_map.get(c, 0) + 1
+
+    # rebuild column
+    updated_col = [[usage_map[r[c_idx]]] for r in rows]
+
+    col_letter = chr(65 + u_idx)
+
+    sheet.update(
+        f"{col_letter}2:{col_letter}{len(rows)+1}",
+        updated_col
+    )
 
 # -----------------------------
 # SUBMIT
