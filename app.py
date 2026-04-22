@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 # CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (No Duplicate Selection)")
+st.title("📊 Faculty Preference System")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
@@ -41,34 +41,52 @@ ss = get_spreadsheet()
 response_sheet = ss.get_worksheet(0)
 
 # -----------------------------
-# LOAD SHEETS
+# LOAD SHEET
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(index):
     sheet = ss.get_worksheet(index)
     data = sheet.get_all_values()
-    return pd.DataFrame(data[1:], columns=data[0])
 
-b1_df = load_sheet(1)
-b2_df = load_sheet(2)
-
-basket1 = b1_df["Course"].tolist()
-basket2 = b2_df["Course"].tolist()
-
-# -----------------------------
-# FACULTY LIST SHEET
-# -----------------------------
-@st.cache_data(ttl=60)
-def load_faculty_master():
-    sheet = ss.worksheet("Faculty List")
-    data = sheet.get_all_values()
     df = pd.DataFrame(data[1:], columns=data[0])
 
-    # cleanup (important)
-    df["EmpID"] = df["EmpID"].astype(str).str.strip()
+    # clean headers
+    df.columns = df.columns.str.strip()
+
     return df
 
-faculty_df = load_faculty_master()
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+b1_df = load_sheet(1)   # Basket 1
+b2_df = load_sheet(2)   # Basket 2
+faculty_df = load_sheet(3)  # Faculty List
+
+# -----------------------------
+# SAFE COURSE EXTRACTION
+# -----------------------------
+def get_course_list(df):
+    course_col = None
+
+    for col in df.columns:
+        if "course" in col.lower():
+            course_col = col
+            break
+
+    if course_col is None:
+        st.error(f"Course column not found. Columns: {df.columns.tolist()}")
+        st.stop()
+
+    return df[course_col].dropna().astype(str).tolist()
+
+basket1 = get_course_list(b1_df)
+basket2 = get_course_list(b2_df)
+
+# -----------------------------
+# FACULTY CLEANUP
+# -----------------------------
+faculty_df.columns = faculty_df.columns.str.strip()
+faculty_df["EmpID"] = faculty_df["EmpID"].astype(str).str.strip()
 
 # -----------------------------
 # EMP ID INPUT
@@ -85,21 +103,18 @@ if emp_id:
         name = match.iloc[0]["Name"]
         designation = match.iloc[0]["Designation"]
     else:
-        st.warning("❌ Employee ID not found in Faculty List")
+        st.warning("❌ Employee ID not found")
 
-# -----------------------------
-# DISPLAY FACULTY DETAILS
-# -----------------------------
 st.text_input("Name", value=name, disabled=True)
 st.text_input("Designation", value=designation, disabled=True)
 
 # -----------------------------
-# UI COLUMNS
+# UI
 # -----------------------------
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# BASKET 1 (NO DUPLICATES)
+# BASKET 1
 # -----------------------------
 with col1:
     st.subheader("📘 Basket 1")
@@ -120,7 +135,7 @@ with col1:
                 available_b1.remove(choice)
 
 # -----------------------------
-# BASKET 2 (NO DUPLICATES)
+# BASKET 2
 # -----------------------------
 with col2:
     st.subheader("📗 Basket 2")
@@ -146,11 +161,11 @@ with col2:
 if st.button("🚀 Submit Preferences"):
 
     if not emp_id or not name:
-        st.error("❌ Enter valid Employee ID first")
+        st.error("❌ Enter valid Employee ID")
         st.stop()
 
     if len(b1_selected) != 7 or len(b2_selected) != 7:
-        st.error("❌ Select exactly 7 unique courses in each basket")
+        st.error("❌ Select exactly 7 courses in each basket")
         st.stop()
 
     try:
@@ -162,7 +177,7 @@ if st.button("🚀 Submit Preferences"):
             *b2_selected
         ])
 
-        st.success("✅ Preferences Submitted Successfully!")
+        st.success("✅ Preferences submitted successfully!")
 
     except Exception as e:
         st.error(f"Error: {e}")
