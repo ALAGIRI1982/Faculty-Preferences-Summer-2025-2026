@@ -259,7 +259,7 @@ def get_client():
 @st.cache_resource
 def get_spreadsheet():
     client = get_client()
-    return client.open_by_key("YOUR_SPREADSHEET_KEY")
+    return client.open_by_key("1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg")
 
 
 spreadsheet = get_spreadsheet()
