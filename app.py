@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 # PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Final Stable Version)")
+st.title("📊 Faculty Preference System ")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
