@@ -4,10 +4,12 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # -----------------------------
-# PAGE CONFIG
+# CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Stable Version)")
+st.title("📊 Faculty Preference System (Stable Production Version)")
+
+SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
 # -----------------------------
 # GOOGLE AUTH
@@ -25,30 +27,27 @@ def get_client():
     )
     return gspread.authorize(creds)
 
+client = get_client()
 
-@st.cache_resource
-def get_spreadsheet():
-    client = get_client()
-    return client.open_by_key("1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg")
+# -----------------------------
+# LOAD SHEET (FIXED - NO UNHASHABLE ERROR)
+# -----------------------------
+@st.cache_data(ttl=60)
+def load_sheet(sheet_index):
+    ss = client.open_by_key(SPREADSHEET_ID)
+    sheet = ss.get_worksheet(sheet_index)
 
-
-spreadsheet = get_spreadsheet()
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
 
 # -----------------------------
 # SHEETS
 # -----------------------------
-response_sheet = spreadsheet.get_worksheet(0)
-basket1_sheet = spreadsheet.get_worksheet(1)
-basket2_sheet = spreadsheet.get_worksheet(2)
-
-# -----------------------------
-# SAFE SHEET LOADER (IMPORTANT FIX)
-# -----------------------------
-@st.cache_data(ttl=60)
-def load_sheet(sheet):
-    data = sheet.get_all_values()
-    df = pd.DataFrame(data[1:], columns=data[0])
-    return df
+ss = client.open_by_key(SPREADSHEET_ID)
+response_sheet = ss.get_worksheet(0)
+basket1_sheet = ss.get_worksheet(1)
+basket2_sheet = ss.get_worksheet(2)
 
 # -----------------------------
 # ENSURE USAGE COLUMN
@@ -60,37 +59,37 @@ def ensure_usage(df):
     return df
 
 # -----------------------------
-# LOAD DATA (CACHED)
+# LOAD DATA (CACHED SAFE)
 # -----------------------------
-b1_df = ensure_usage(load_sheet(basket1_sheet))
-b2_df = ensure_usage(load_sheet(basket2_sheet))
+b1_df = ensure_usage(load_sheet(1))
+b2_df = ensure_usage(load_sheet(2))
 
 # -----------------------------
 # SYSTEM STATE
 # -----------------------------
-existing = response_sheet.col_values(1)
-is_first_submission = len(existing) <= 1
+existing_ids = response_sheet.col_values(1)
+first_time = len(existing_ids) <= 1
 
 # -----------------------------
 # EMPLOYEE ID
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
-if emp_id and emp_id in existing:
+if emp_id and emp_id in existing_ids:
     st.warning("Already submitted")
     st.stop()
 
 # -----------------------------
 # GET COURSE LIST
 # -----------------------------
-def get_courses(df, first_time):
-    if first_time:
+def get_courses(df, first):
+    if first:
         return df["Course"].tolist()
     else:
         return df.sort_values("Usage")["Course"].head(7).tolist()
 
 # -----------------------------
-# UI LAYOUT
+# UI
 # -----------------------------
 col1, col2 = st.columns(2)
 
@@ -100,7 +99,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("📘 Basket 1")
 
-    b1_list = get_courses(b1_df, is_first_submission)
+    b1_list = get_courses(b1_df, first_time)
     b1_selected = []
 
     for i in range(7):
@@ -121,7 +120,7 @@ with col1:
 with col2:
     st.subheader("📗 Basket 2")
 
-    b2_list = get_courses(b2_df, is_first_submission)
+    b2_list = get_courses(b2_df, first_time)
     b2_selected = []
 
     for i in range(7):
@@ -137,7 +136,7 @@ with col2:
                 b2_list.remove(choice)
 
 # -----------------------------
-# UPDATE USAGE (SAFE)
+# UPDATE USAGE (SAFE WRITE)
 # -----------------------------
 def update_usage(sheet, df, selected):
     for course in selected:
@@ -153,10 +152,10 @@ def update_usage(sheet, df, selected):
             sheet.update_cell(row, col, new_val)
 
         except Exception as e:
-            st.error(f"Update error for {course}: {e}")
+            st.error(f"Error updating {course}: {e}")
 
 # -----------------------------
-# SUBMIT BUTTON (ONLY API WRITE HERE)
+# SUBMIT
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
@@ -165,11 +164,9 @@ if st.button("🚀 Submit Preferences"):
         st.stop()
 
     try:
-        # update usage
         update_usage(basket1_sheet, b1_df, b1_selected)
         update_usage(basket2_sheet, b2_df, b2_selected)
 
-        # save response
         response_sheet.append_row([
             emp_id,
             *b1_selected,
