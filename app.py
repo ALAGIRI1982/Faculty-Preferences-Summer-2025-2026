@@ -7,12 +7,14 @@ from google.oauth2.service_account import Credentials
 # CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Quota Safe Version)")
+st.title("📊 Faculty Preference System (Stable Production Version)")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
+SERVICE_ACCOUNT_EMAIL = "faculty-preference@faculty-preference.iam.gserviceaccount.com"
+
 # -----------------------------
-# GOOGLE AUTH
+# AUTH
 # -----------------------------
 @st.cache_resource
 def get_client():
@@ -28,53 +30,51 @@ def get_client():
     return gspread.authorize(creds)
 
 client = get_client()
-
 ss = client.open_by_key(SPREADSHEET_ID)
+
+# -----------------------------
+# SHEETS
+# -----------------------------
 response_sheet = ss.get_worksheet(0)
 basket1_sheet = ss.get_worksheet(1)
 basket2_sheet = ss.get_worksheet(2)
 
 # -----------------------------
-# SAFE LOADER (NO API OVERLOAD)
+# LOAD DATA (SAFE + CACHED)
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(index):
     sheet = ss.get_worksheet(index)
     data = sheet.get_all_values()
-    return pd.DataFrame(data[1:], columns=data[0])
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
 
-# -----------------------------
-# INIT USAGE COLUMN
-# -----------------------------
 def ensure_usage(df):
     if "Usage" not in df.columns:
         df["Usage"] = 0
     df["Usage"] = pd.to_numeric(df["Usage"], errors="coerce").fillna(0).astype(int)
     return df
 
-# -----------------------------
-# LOAD DATA
-# -----------------------------
 b1_df = ensure_usage(load_sheet(1))
 b2_df = ensure_usage(load_sheet(2))
 
 # -----------------------------
 # SYSTEM STATE
 # -----------------------------
-existing = response_sheet.col_values(1)
-first_time = len(existing) <= 1
+existing_ids = response_sheet.col_values(1)
+first_time = len(existing_ids) <= 1
 
 # -----------------------------
 # EMPLOYEE ID
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
-if emp_id and emp_id in existing:
+if emp_id and emp_id in existing_ids:
     st.warning("Already submitted")
     st.stop()
 
 # -----------------------------
-# COURSE SELECTION LOGIC
+# COURSE LIST LOGIC
 # -----------------------------
 def get_courses(df):
     if first_time:
@@ -131,7 +131,7 @@ with col2:
 # -----------------------------
 # ⚡ BULK UPDATE (NO QUOTA ERROR)
 # -----------------------------
-def update_usage(sheet, df, selected):
+def update_usage(sheet, selected_courses):
     data = sheet.get_all_values()
 
     headers = data[0]
@@ -146,8 +146,8 @@ def update_usage(sheet, df, selected):
     for r in rows:
         usage_map[r[c_idx]] = int(r[u_idx]) if r[u_idx] else 0
 
-    # update locally
-    for c in selected:
+    # update usage locally
+    for c in selected_courses:
         usage_map[c] = usage_map.get(c, 0) + 1
 
     # rebuild column
@@ -170,8 +170,8 @@ if st.button("🚀 Submit Preferences"):
         st.stop()
 
     try:
-        update_usage(basket1_sheet, b1_df, b1_selected)
-        update_usage(basket2_sheet, b2_df, b2_selected)
+        update_usage(basket1_sheet, b1_selected)
+        update_usage(basket2_sheet, b2_selected)
 
         response_sheet.append_row([
             emp_id,
