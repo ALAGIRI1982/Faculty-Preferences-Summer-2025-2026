@@ -4,17 +4,15 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # -----------------------------
-# CONFIG
+# PAGE CONFIG
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
-st.title("📊 Faculty Preference System (Stable Production Version)")
+st.title("📊 Faculty Preference System (Fully Fixed Version)")
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
-SERVICE_ACCOUNT_EMAIL = "faculty-preference@faculty-preference.iam.gserviceaccount.com"
-
 # -----------------------------
-# AUTH
+# GOOGLE AUTH
 # -----------------------------
 @st.cache_resource
 def get_client():
@@ -30,24 +28,28 @@ def get_client():
     return gspread.authorize(creds)
 
 client = get_client()
-ss = client.open_by_key(SPREADSHEET_ID)
 
 # -----------------------------
-# SHEETS
+# SAFE SPREADSHEET LOADER (IMPORTANT FIX)
 # -----------------------------
+@st.cache_resource
+def get_spreadsheet():
+    return client.open_by_key(SPREADSHEET_ID)
+
+ss = get_spreadsheet()
+
 response_sheet = ss.get_worksheet(0)
 basket1_sheet = ss.get_worksheet(1)
 basket2_sheet = ss.get_worksheet(2)
 
 # -----------------------------
-# LOAD DATA (SAFE + CACHED)
+# LOAD GOOGLE SHEETS DATA (CACHED)
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(index):
     sheet = ss.get_worksheet(index)
     data = sheet.get_all_values()
-    df = pd.DataFrame(data[1:], columns=data[0])
-    return df
+    return pd.DataFrame(data[1:], columns=data[0])
 
 def ensure_usage(df):
     if "Usage" not in df.columns:
@@ -59,22 +61,55 @@ b1_df = ensure_usage(load_sheet(1))
 b2_df = ensure_usage(load_sheet(2))
 
 # -----------------------------
-# SYSTEM STATE
+# EMPLOYEE DATA LOADER (FIXED)
 # -----------------------------
-existing_ids = response_sheet.col_values(1)
-first_time = len(existing_ids) <= 1
+@st.cache_data
+def load_employees():
+    df = pd.read_excel("employees.xlsx")
+
+    # clean column names
+    df.columns = df.columns.str.strip()
+
+    # normalize EmpID
+    df["EmpID"] = df["EmpID"].astype(str).str.strip()
+
+    return df
+
+employees = load_employees()
 
 # -----------------------------
-# EMPLOYEE ID
+# EMPLOYEE INPUT
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
-if emp_id and emp_id in existing_ids:
-    st.warning("Already submitted")
-    st.stop()
+name = ""
+designation = ""
+
+if emp_id:
+    emp_id = str(emp_id).strip()
+
+    emp_row = employees[employees["EmpID"] == emp_id]
+
+    if not emp_row.empty:
+        name = emp_row.iloc[0]["Name"]
+        designation = emp_row.iloc[0]["Designation"]
+        st.success(f"Employee Found: {name} ({designation})")
+    else:
+        st.warning("Employee ID not found")
 
 # -----------------------------
-# COURSE LIST LOGIC
+# DUPLICATE CHECK
+# -----------------------------
+existing_ids = response_sheet.col_values(1)
+
+if emp_id and emp_id in existing_ids:
+    st.warning("Already submitted preferences")
+    st.stop()
+
+first_time = len(existing_ids) <= 1
+
+# -----------------------------
+# COURSE LOGIC
 # -----------------------------
 def get_courses(df):
     if first_time:
@@ -129,7 +164,7 @@ with col2:
                 b2_list.remove(choice)
 
 # -----------------------------
-# ⚡ BULK UPDATE (NO QUOTA ERROR)
+# BULK UPDATE (NO QUOTA ERROR)
 # -----------------------------
 def update_usage(sheet, selected_courses):
     data = sheet.get_all_values()
@@ -142,15 +177,12 @@ def update_usage(sheet, selected_courses):
 
     usage_map = {}
 
-    # current usage
     for r in rows:
         usage_map[r[c_idx]] = int(r[u_idx]) if r[u_idx] else 0
 
-    # update usage locally
     for c in selected_courses:
         usage_map[c] = usage_map.get(c, 0) + 1
 
-    # rebuild column
     updated_col = [[usage_map[r[c_idx]]] for r in rows]
 
     col_letter = chr(65 + u_idx)
@@ -161,7 +193,7 @@ def update_usage(sheet, selected_courses):
     )
 
 # -----------------------------
-# SUBMIT
+# SUBMIT BUTTON
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
@@ -175,6 +207,8 @@ if st.button("🚀 Submit Preferences"):
 
         response_sheet.append_row([
             emp_id,
+            name,
+            designation,
             *b1_selected,
             *b2_selected
         ])
