@@ -360,9 +360,9 @@ with col1:
         row = b1_df[b1_df["Course"] == c].iloc[0]
 
         if row["Usage"] <= threshold:
-            st.markdown(f"🟢 **{c}** Less Preferred")
+            st.markdown(f"🟢 **{c}**")
         else:
-            st.markdown(f"🔴 **{c}** Highly Preferred")
+            st.markdown(f"🔴 **{c}**")
 
 # -----------------------------
 # BASKET 2
