@@ -285,7 +285,7 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD SHEET DATA (FIXED)
+# LOAD SHEET DATA
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(sheet_name):
@@ -294,16 +294,14 @@ def load_sheet(sheet_name):
     return pd.DataFrame(data[1:], columns=data[0])
 
 # -----------------------------
-# STRICT COLUMN VALIDATION
+# STRICT VALIDATION
 # -----------------------------
 def ensure_usage(df):
-    # Usage
     if "Usage" not in df.columns:
         df["Usage"] = 0
 
-    # Max must exist
     if "Max" not in df.columns:
-        st.error("❌ 'Max' column missing in sheet. Please fix Google Sheet.")
+        st.error("❌ 'Max' column missing in sheet")
         st.stop()
 
     df["Usage"] = pd.to_numeric(df["Usage"], errors="coerce").fillna(0).astype(int)
@@ -311,7 +309,6 @@ def ensure_usage(df):
 
     return df
 
-# Load basket data
 b1_df = ensure_usage(load_sheet("Basket1"))
 b2_df = ensure_usage(load_sheet("Basket2"))
 
@@ -353,17 +350,17 @@ if emp_id:
         st.warning("Employee ID not found ❌")
 
 # -----------------------------
-# DUPLICATE CHECK
+# DUPLICATE CHECK (STRICT)
 # -----------------------------
 response_sheet = ss.worksheet("Responses")
-existing_ids = response_sheet.col_values(1)
+existing_ids = [str(x).strip() for x in response_sheet.col_values(1)]
 
-if emp_id and emp_id in existing_ids:
-    st.warning("Already submitted")
+if emp_id and str(emp_id).strip() in existing_ids:
+    st.error("❌ You have already submitted your preferences")
     st.stop()
 
 # -----------------------------
-# DISPLAY TABLE (RED IF FULL)
+# DISPLAY TABLE
 # -----------------------------
 def display_table(df, title):
     st.subheader(title)
@@ -376,13 +373,10 @@ def display_table(df, title):
     st.dataframe(df.style.apply(highlight, axis=1))
 
 # -----------------------------
-# COURSE MAP
+# COURSE MAP (ONLY NAMES)
 # -----------------------------
 def create_course_map(df):
-    return {
-        f"{row['Course']} (Used: {row['Usage']}/{row['Max']})": row['Course']
-        for _, row in df.iterrows()
-    }
+    return {row["Course"]: row["Course"] for _, row in df.iterrows()}
 
 # -----------------------------
 # UI
@@ -396,12 +390,14 @@ with col1:
     b1_map = create_course_map(b1_df)
 
     b1_selected_labels = st.multiselect(
-        "Select up to 7 courses",
+        "Select exactly 7 courses",
         list(b1_map.keys()),
         max_selections=7
     )
 
     b1_selected = [b1_map[x] for x in b1_selected_labels]
+
+    st.write(f"Selected: {len(b1_selected)} / 7")
 
     for c in b1_selected:
         row = b1_df[b1_df["Course"] == c].iloc[0]
@@ -415,12 +411,14 @@ with col2:
     b2_map = create_course_map(b2_df)
 
     b2_selected_labels = st.multiselect(
-        "Select up to 7 courses",
+        "Select exactly 7 courses",
         list(b2_map.keys()),
         max_selections=7
     )
 
     b2_selected = [b2_map[x] for x in b2_selected_labels]
+
+    st.write(f"Selected: {len(b2_selected)} / 7")
 
     for c in b2_selected:
         row = b2_df[b2_df["Course"] == c].iloc[0]
@@ -458,8 +456,8 @@ def update_usage(sheet_name, selected):
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
-    if len(b1_selected) == 0 or len(b2_selected) == 0:
-        st.error("Select at least 1 course in each basket")
+    if len(b1_selected) != 7 or len(b2_selected) != 7:
+        st.error("❌ You must select exactly 7 courses in each basket")
         st.stop()
 
     try:
