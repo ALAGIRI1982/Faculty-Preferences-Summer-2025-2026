@@ -345,7 +345,7 @@ col1, col2 = st.columns(2)
 # -----------------------------
 with col1:
     st.subheader("📘 Basket 1")
-    st.caption("🟢 Available   🔴 Full")
+    st.caption("🟢 Less Preferred   🔴 Highly Preferred")
 
     b1_selected = st.multiselect(
         "Select exactly 7 courses",
