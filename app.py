@@ -285,7 +285,7 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD SHEET DATA
+# LOAD SHEET DATA (NO UI HERE)
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(sheet_name):
@@ -293,9 +293,6 @@ def load_sheet(sheet_name):
     data = sheet.get_all_values()
     return pd.DataFrame(data[1:], columns=data[0])
 
-# -----------------------------
-# STRICT VALIDATION
-# -----------------------------
 def ensure_usage(df):
     if "Usage" not in df.columns:
         df["Usage"] = 0
@@ -313,7 +310,7 @@ b1_df = ensure_usage(load_sheet("Basket1"))
 b2_df = ensure_usage(load_sheet("Basket2"))
 
 # -----------------------------
-# LOAD EMPLOYEES
+# EMPLOYEES
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_employees():
@@ -342,91 +339,60 @@ if emp_id:
     if not emp_row.empty:
         name = emp_row.iloc[0]["Name"]
         designation = emp_row.iloc[0]["Designation"]
-
         st.success("Employee Found ✅")
-        st.write("**Name:**", name)
-        st.write("**Designation:**", designation)
+        st.write(f"Name: {name}")
+        st.write(f"Designation: {designation}")
     else:
         st.warning("Employee ID not found ❌")
 
 # -----------------------------
-# DUPLICATE CHECK (STRICT)
+# DUPLICATE CHECK
 # -----------------------------
 response_sheet = ss.worksheet("Responses")
 existing_ids = [str(x).strip() for x in response_sheet.col_values(1)]
 
-if emp_id and str(emp_id).strip() in existing_ids:
-    st.error("❌ You have already submitted your preferences")
+if emp_id and emp_id in existing_ids:
+    st.error("❌ You have already submitted")
     st.stop()
 
 # -----------------------------
-# DISPLAY TABLE
+# ONLY COURSE NAMES (STRICT)
 # -----------------------------
-def display_table(df, title):
-    st.subheader(title)
+b1_courses = b1_df["Course"].dropna().astype(str).tolist()
+b2_courses = b2_df["Course"].dropna().astype(str).tolist()
 
-    def highlight(row):
-        if row["Usage"] >= row["Max"]:
-            return ["background-color: red"] * len(row)
-        return [""] * len(row)
-
-    st.dataframe(df.style.apply(highlight, axis=1))
-
-# -----------------------------
-# COURSE MAP (ONLY NAMES)
-# -----------------------------
-def create_course_map(df):
-    return {row["Course"]: row["Course"] for _, row in df.iterrows()}
-
-# -----------------------------
-# UI
-# -----------------------------
 col1, col2 = st.columns(2)
 
-# Basket 1
+# -----------------------------
+# BASKET 1 UI
+# -----------------------------
 with col1:
-    display_table(b1_df, "📘 Basket 1")
+    st.subheader("📘 Basket 1")
 
-    b1_map = create_course_map(b1_df)
-
-    b1_selected_labels = st.multiselect(
+    b1_selected = st.multiselect(
         "Select exactly 7 courses",
-        list(b1_map.keys()),
+        b1_courses,
         max_selections=7
     )
-
-    b1_selected = [b1_map[x] for x in b1_selected_labels]
 
     st.write(f"Selected: {len(b1_selected)} / 7")
 
-    for c in b1_selected:
-        row = b1_df[b1_df["Course"] == c].iloc[0]
-        if row["Usage"] >= row["Max"]:
-            st.error(f"⚠ {c} is FULL!")
-
-# Basket 2
+# -----------------------------
+# BASKET 2 UI
+# -----------------------------
 with col2:
-    display_table(b2_df, "📗 Basket 2")
+    st.subheader("📗 Basket 2")
 
-    b2_map = create_course_map(b2_df)
-
-    b2_selected_labels = st.multiselect(
+    b2_selected = st.multiselect(
         "Select exactly 7 courses",
-        list(b2_map.keys()),
+        b2_courses,
         max_selections=7
     )
 
-    b2_selected = [b2_map[x] for x in b2_selected_labels]
-
     st.write(f"Selected: {len(b2_selected)} / 7")
 
-    for c in b2_selected:
-        row = b2_df[b2_df["Course"] == c].iloc[0]
-        if row["Usage"] >= row["Max"]:
-            st.error(f"⚠ {c} is FULL!")
-
 # -----------------------------
-# UPDATE USAGE
+# UPDATE USAGE (BACKEND ONLY)
 # -----------------------------
 def update_usage(sheet_name, selected):
     sheet = ss.worksheet(sheet_name)
@@ -473,7 +439,10 @@ if st.button("🚀 Submit Preferences"):
         ])
 
         st.success("✅ Submitted Successfully")
+
+        # Clear cache to avoid stale UI
         st.cache_data.clear()
+        st.cache_resource.clear()
 
     except Exception as e:
         st.error(f"Error: {e}")
