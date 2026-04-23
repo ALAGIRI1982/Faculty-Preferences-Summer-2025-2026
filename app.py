@@ -270,7 +270,6 @@ def get_client():
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-
     creds = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=scope
@@ -286,24 +285,11 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD SHEETS BY NAME (UPDATED)
-# -----------------------------
-@st.cache_resource
-def get_sheets():
-    response_sheet = ss.worksheet("Responses")
-    basket1_sheet = ss.worksheet("Basket1")
-    basket2_sheet = ss.worksheet("Basket2")
-    employee_sheet = ss.worksheet("Faculty List")
-
-    return response_sheet, basket1_sheet, basket2_sheet, employee_sheet
-
-response_sheet, basket1_sheet, basket2_sheet, employee_sheet = get_sheets()
-
-# -----------------------------
-# LOAD DATA
+# LOAD DATA (FIXED - USE STRING)
 # -----------------------------
 @st.cache_data(ttl=60)
-def load_sheet(sheet):
+def load_sheet(sheet_name):
+    sheet = ss.worksheet(sheet_name)
     data = sheet.get_all_values()
     return pd.DataFrame(data[1:], columns=data[0])
 
@@ -317,20 +303,21 @@ def ensure_usage(df):
     df["Max"] = pd.to_numeric(df["Max"], errors="coerce").fillna(999).astype(int)
     return df
 
-b1_df = ensure_usage(load_sheet(basket1_sheet))
-b2_df = ensure_usage(load_sheet(basket2_sheet))
+# Load baskets
+b1_df = ensure_usage(load_sheet("Basket1"))
+b2_df = ensure_usage(load_sheet("Basket2"))
 
 # -----------------------------
-# LOAD EMPLOYEES (Faculty List)
+# LOAD EMPLOYEES
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_employees():
-    data = employee_sheet.get_all_values()
+    sheet = ss.worksheet("Faculty List")
+    data = sheet.get_all_values()
     df = pd.DataFrame(data[1:], columns=data[0])
 
     df.columns = df.columns.str.strip()
     df["EmpID"] = df["EmpID"].astype(str).str.strip()
-
     return df
 
 employees = load_employees()
@@ -360,6 +347,7 @@ if emp_id:
 # -----------------------------
 # DUPLICATE CHECK
 # -----------------------------
+response_sheet = ss.worksheet("Responses")
 existing_ids = response_sheet.col_values(1)
 
 if emp_id and emp_id in existing_ids:
@@ -367,7 +355,7 @@ if emp_id and emp_id in existing_ids:
     st.stop()
 
 # -----------------------------
-# DISPLAY COURSE TABLE
+# DISPLAY TABLE
 # -----------------------------
 def display_table(df, title):
     st.subheader(title)
@@ -380,7 +368,7 @@ def display_table(df, title):
     st.dataframe(df.style.apply(highlight, axis=1))
 
 # -----------------------------
-# FORMAT COURSE LABELS
+# COURSE MAP
 # -----------------------------
 def create_course_map(df):
     return {
@@ -393,17 +381,16 @@ def create_course_map(df):
 # -----------------------------
 col1, col2 = st.columns(2)
 
-# -----------------------------
-# BASKET 1
-# -----------------------------
+# Basket 1
 with col1:
-    display_table(b1_df, "📘 Basket 1 Courses")
+    display_table(b1_df, "📘 Basket 1")
 
     b1_map = create_course_map(b1_df)
+    b1_labels = list(b1_map.keys())
 
     b1_selected_labels = st.multiselect(
         "Select up to 7 courses",
-        list(b1_map.keys()),
+        b1_labels,
         max_selections=7
     )
 
@@ -414,17 +401,16 @@ with col1:
         if row["Usage"] >= row["Max"]:
             st.error(f"⚠ {c} is FULL!")
 
-# -----------------------------
-# BASKET 2
-# -----------------------------
+# Basket 2
 with col2:
-    display_table(b2_df, "📗 Basket 2 Courses")
+    display_table(b2_df, "📗 Basket 2")
 
     b2_map = create_course_map(b2_df)
+    b2_labels = list(b2_map.keys())
 
     b2_selected_labels = st.multiselect(
         "Select up to 7 courses",
-        list(b2_map.keys()),
+        b2_labels,
         max_selections=7
     )
 
@@ -438,7 +424,8 @@ with col2:
 # -----------------------------
 # UPDATE USAGE
 # -----------------------------
-def update_usage(sheet, selected):
+def update_usage(sheet_name, selected):
+    sheet = ss.worksheet(sheet_name)
     data = sheet.get_all_values()
 
     headers = data[0]
@@ -453,10 +440,9 @@ def update_usage(sheet, selected):
         usage_map[r[c_idx]] = int(r[u_idx]) if r[u_idx] else 0
 
     for c in selected:
-        usage_map[c] = usage_map.get(c, 0) + 1
+        usage_map[c] += 1
 
     updated_col = [[usage_map[r[c_idx]]] for r in rows]
-
     col_letter = chr(65 + u_idx)
 
     sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated_col)
@@ -471,8 +457,8 @@ if st.button("🚀 Submit Preferences"):
         st.stop()
 
     try:
-        update_usage(basket1_sheet, b1_selected)
-        update_usage(basket2_sheet, b2_selected)
+        update_usage("Basket1", b1_selected)
+        update_usage("Basket2", b2_selected)
 
         response_sheet.append_row([
             emp_id,
@@ -483,11 +469,7 @@ if st.button("🚀 Submit Preferences"):
         ])
 
         st.success("✅ Submitted Successfully")
-
         st.cache_data.clear()
-
-    except Exception as e:
-        st.error(f"Error: {e}")
 
     except Exception as e:
         st.error(f"Error: {e}")
