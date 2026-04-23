@@ -285,7 +285,7 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD DATA (FIXED - USE STRING)
+# LOAD SHEET DATA (FIXED)
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(sheet_name):
@@ -293,17 +293,25 @@ def load_sheet(sheet_name):
     data = sheet.get_all_values()
     return pd.DataFrame(data[1:], columns=data[0])
 
+# -----------------------------
+# STRICT COLUMN VALIDATION
+# -----------------------------
 def ensure_usage(df):
+    # Usage
     if "Usage" not in df.columns:
         df["Usage"] = 0
+
+    # Max must exist
     if "Max" not in df.columns:
-        df["Max"] = 999
+        st.error("❌ 'Max' column missing in sheet. Please fix Google Sheet.")
+        st.stop()
 
     df["Usage"] = pd.to_numeric(df["Usage"], errors="coerce").fillna(0).astype(int)
-    df["Max"] = pd.to_numeric(df["Max"], errors="coerce").fillna(999).astype(int)
+    df["Max"] = pd.to_numeric(df["Max"], errors="coerce").fillna(0).astype(int)
+
     return df
 
-# Load baskets
+# Load basket data
 b1_df = ensure_usage(load_sheet("Basket1"))
 b2_df = ensure_usage(load_sheet("Basket2"))
 
@@ -355,7 +363,7 @@ if emp_id and emp_id in existing_ids:
     st.stop()
 
 # -----------------------------
-# DISPLAY TABLE
+# DISPLAY TABLE (RED IF FULL)
 # -----------------------------
 def display_table(df, title):
     st.subheader(title)
@@ -386,11 +394,10 @@ with col1:
     display_table(b1_df, "📘 Basket 1")
 
     b1_map = create_course_map(b1_df)
-    b1_labels = list(b1_map.keys())
 
     b1_selected_labels = st.multiselect(
         "Select up to 7 courses",
-        b1_labels,
+        list(b1_map.keys()),
         max_selections=7
     )
 
@@ -406,11 +413,10 @@ with col2:
     display_table(b2_df, "📗 Basket 2")
 
     b2_map = create_course_map(b2_df)
-    b2_labels = list(b2_map.keys())
 
     b2_selected_labels = st.multiselect(
         "Select up to 7 courses",
-        b2_labels,
+        list(b2_map.keys()),
         max_selections=7
     )
 
@@ -443,8 +449,8 @@ def update_usage(sheet_name, selected):
         usage_map[c] += 1
 
     updated_col = [[usage_map[r[c_idx]]] for r in rows]
-    col_letter = chr(65 + u_idx)
 
+    col_letter = chr(65 + u_idx)
     sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated_col)
 
 # -----------------------------
