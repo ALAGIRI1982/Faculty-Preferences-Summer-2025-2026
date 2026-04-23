@@ -285,7 +285,7 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD SHEET DATA (NO UI HERE)
+# LOAD DATA
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_sheet(sheet_name):
@@ -310,7 +310,7 @@ b1_df = ensure_usage(load_sheet("Basket1"))
 b2_df = ensure_usage(load_sheet("Basket2"))
 
 # -----------------------------
-# EMPLOYEES
+# LOAD EMPLOYEES
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_employees():
@@ -325,23 +325,28 @@ def load_employees():
 employees = load_employees()
 
 # -----------------------------
+# SESSION STATE INIT
+# -----------------------------
+if "name" not in st.session_state:
+    st.session_state.name = None
+    st.session_state.designation = None
+
+# -----------------------------
 # EMP INPUT
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
-
-name = None
-designation = None
 
 if emp_id:
     emp_id = str(emp_id).strip()
     emp_row = employees[employees["EmpID"] == emp_id]
 
     if not emp_row.empty:
-        name = emp_row.iloc[0]["Name"]
-        designation = emp_row.iloc[0]["Designation"]
+        st.session_state.name = emp_row.iloc[0]["Name"]
+        st.session_state.designation = emp_row.iloc[0]["Designation"]
+
         st.success("Employee Found ✅")
-        st.write(f"Name: {name}")
-        st.write(f"Designation: {designation}")
+        st.write("Name:", st.session_state.name)
+        st.write("Designation:", st.session_state.designation)
     else:
         st.warning("Employee ID not found ❌")
 
@@ -356,7 +361,7 @@ if emp_id and emp_id in existing_ids:
     st.stop()
 
 # -----------------------------
-# ONLY COURSE NAMES (STRICT)
+# COURSE LIST (ONLY NAMES)
 # -----------------------------
 b1_courses = b1_df["Course"].dropna().astype(str).tolist()
 b2_courses = b2_df["Course"].dropna().astype(str).tolist()
@@ -364,7 +369,7 @@ b2_courses = b2_df["Course"].dropna().astype(str).tolist()
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# BASKET 1 UI
+# BASKET 1
 # -----------------------------
 with col1:
     st.subheader("📘 Basket 1")
@@ -378,7 +383,7 @@ with col1:
     st.write(f"Selected: {len(b1_selected)} / 7")
 
 # -----------------------------
-# BASKET 2 UI
+# BASKET 2
 # -----------------------------
 with col2:
     st.subheader("📗 Basket 2")
@@ -392,7 +397,7 @@ with col2:
     st.write(f"Selected: {len(b2_selected)} / 7")
 
 # -----------------------------
-# UPDATE USAGE (BACKEND ONLY)
+# UPDATE USAGE
 # -----------------------------
 def update_usage(sheet_name, selected):
     sheet = ss.worksheet(sheet_name)
@@ -422,8 +427,12 @@ def update_usage(sheet_name, selected):
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
+    if st.session_state.name is None:
+        st.error("❌ Enter valid Employee ID first")
+        st.stop()
+
     if len(b1_selected) != 7 or len(b2_selected) != 7:
-        st.error("❌ You must select exactly 7 courses in each basket")
+        st.error("❌ Select exactly 7 courses in each basket")
         st.stop()
 
     try:
@@ -432,15 +441,14 @@ if st.button("🚀 Submit Preferences"):
 
         response_sheet.append_row([
             emp_id,
-            name,
-            designation,
+            st.session_state.name,
+            st.session_state.designation,
             *b1_selected,
             *b2_selected
         ])
 
         st.success("✅ Submitted Successfully")
 
-        # Clear cache to avoid stale UI
         st.cache_data.clear()
         st.cache_resource.clear()
 
