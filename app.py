@@ -8,16 +8,84 @@ from google.oauth2.service_account import Credentials
 # -----------------------------
 st.set_page_config(page_title="Faculty Preference System", layout="wide")
 
-# 🎨 BACKGROUND
+# -----------------------------
+# 🌈 ADVANCED COLORFUL UI
+# -----------------------------
 st.markdown("""
 <style>
+
+/* 🌈 Animated Gradient Background */
 .stApp {
-    background: linear-gradient(to right, #e0f7fa, #e8f5e9);
+    background: linear-gradient(135deg, #ff6ec4, #7873f5, #4facfe, #43e97b, #f9d423);
+    background-size: 300% 300%;
+    animation: gradientMove 12s ease infinite;
 }
+
+/* 🎬 Animation */
+@keyframes gradientMove {
+    0% {background-position: 0% 50%;}
+    50% {background-position: 100% 50%;}
+    100% {background-position: 0% 50%;}
+}
+
+/* 📦 Glass Card */
+.block-container {
+    background: rgba(255,255,255,0.92);
+    padding: 25px;
+    border-radius: 18px;
+    box-shadow: 0 10px 35px rgba(0,0,0,0.2);
+}
+
+/* 🎓 Title */
+.title {
+    text-align: center;
+    font-size: 40px;
+    font-weight: 800;
+    color: #1f2937;
+}
+
+/* 📘 Basket Headers */
+.basket1 {
+    background: linear-gradient(90deg, #2563eb, #3b82f6);
+    padding: 10px;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+}
+
+.basket2 {
+    background: linear-gradient(90deg, #ec4899, #f43f5e);
+    padding: 10px;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+}
+
+/* 🟢🔴 Course Styling */
+.course-green {
+    color: #16a34a;
+    font-weight: 600;
+}
+.course-red {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+/* 🚀 Button */
+.stButton>button {
+    background: linear-gradient(90deg, #7c3aed, #ec4899);
+    color: white;
+    font-weight: bold;
+    border-radius: 10px;
+    height: 50px;
+    width: 100%;
+    font-size: 18px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 Faculty Preference System")
+st.markdown("<div class='title'>🎓 Faculty Preference System</div>", unsafe_allow_html=True)
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
@@ -58,7 +126,7 @@ def clean_df(df):
     df["Max"] = pd.to_numeric(df.get("Max", 0), errors="coerce").fillna(0).astype(int)
 
     if (df["Max"] <= 0).any():
-        st.error("❌ Max must be > 0 in sheet")
+        st.error("Max must be > 0 in sheet")
         st.stop()
 
     return df
@@ -67,7 +135,7 @@ b1_df = clean_df(load_sheet("Basket1"))
 b2_df = clean_df(load_sheet("Basket2"))
 
 # -----------------------------
-# EMPLOYEE DATA
+# EMPLOYEES
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_employees():
@@ -99,7 +167,7 @@ if emp_id:
         st.session_state.name = row.iloc[0]["Name"]
         st.session_state.designation = row.iloc[0]["Designation"]
 
-        st.success("Employee Found ✅")
+        st.success("Employee Found")
         st.write("Name:", st.session_state.name)
         st.write("Designation:", st.session_state.designation)
     else:
@@ -112,7 +180,7 @@ response_sheet = ss.worksheet("Responses")
 existing_ids = [str(x).strip() for x in response_sheet.col_values(1)]
 
 if emp_id and emp_id in existing_ids:
-    st.error("❌ Already submitted")
+    st.error("Already submitted")
     st.stop()
 
 # -----------------------------
@@ -127,8 +195,7 @@ col1, col2 = st.columns(2)
 # BASKET 1
 # -----------------------------
 with col1:
-    st.subheader("📘 Basket 1")
-    st.caption("🟢 Less Preferred   🔴 Highly Preferred")
+    st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
 
     b1_selected = st.multiselect(
         "Select exactly 7 courses",
@@ -144,16 +211,15 @@ with col1:
         row = b1_df[b1_df["Course"] == c].iloc[0]
 
         if row["Usage"] <= threshold:
-            st.markdown(f"🟢 **{c}**")
+            st.markdown(f"<div class='course-green'>🟢 {c}</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"🔴 **{c}**")
+            st.markdown(f"<div class='course-red'>🔴 {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # BASKET 2
 # -----------------------------
 with col2:
-    st.subheader("📗 Basket 2")
-    st.caption("🟢 Less Preferred   🔴 Highly Preferred")
+    st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
 
     b2_selected = st.multiselect(
         "Select exactly 7 courses",
@@ -169,9 +235,9 @@ with col2:
         row = b2_df[b2_df["Course"] == c].iloc[0]
 
         if row["Usage"] <= threshold:
-            st.markdown(f"🟢 **{c}**")
+            st.markdown(f"<div class='course-green'>🟢 {c}</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"🔴 **{c}**")
+            st.markdown(f"<div class='course-red'>🔴 {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # UPDATE USAGE
@@ -221,7 +287,7 @@ if st.button("🚀 Submit Preferences"):
             *b2_selected
         ])
 
-        st.success("✅ Submitted Successfully")
+        st.success("Submitted Successfully")
 
         st.cache_data.clear()
         st.cache_resource.clear()
