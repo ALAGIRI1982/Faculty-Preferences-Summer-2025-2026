@@ -385,9 +385,9 @@ with col2:
         row = b2_df[b2_df["Course"] == c].iloc[0]
 
         if row["Usage"] <= threshold:
-            st.markdown(f"🟢 **{c}** Less Preferred")
+            st.markdown(f"🟢 **{c}**")
         else:
-            st.markdown(f"🔴 **{c}** Highly Preferred")
+            st.markdown(f"🔴 **{c}**")
 
 # -----------------------------
 # UPDATE USAGE
