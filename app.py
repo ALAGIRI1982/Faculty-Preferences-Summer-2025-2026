@@ -650,8 +650,6 @@ st.markdown("""
     color:white;
     font-weight:bold;
 }
-.green { color:#16a34a; font-weight:600; }
-.red { color:#dc2626; font-weight:600; }
 .stButton>button {
     background: linear-gradient(90deg,#7c3aed,#ec4899);
     color:white;
@@ -666,7 +664,7 @@ st.markdown("""
 # -----------------------------
 # TITLE
 # -----------------------------
-st.markdown("<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>🎓 Faculty Course Preference System 2026-2027</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # GOOGLE SHEETS
@@ -724,7 +722,7 @@ def load_employees():
 employees = load_employees()
 
 # -----------------------------
-# INPUT (LOGIN)
+# LOGIN
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
@@ -737,6 +735,8 @@ if emp_id:
     if not row.empty:
         name = row.iloc[0]["Name"]
         designation = row.iloc[0]["Designation"]
+        st.success(f"Welcome {name}")
+        st.info(f"Designation: {designation}")
         logged_in = True
     else:
         st.warning("Invalid Employee ID")
@@ -763,11 +763,7 @@ if "b2" not in st.session_state:
 # -----------------------------
 # SHOW UI ONLY AFTER LOGIN
 # -----------------------------
-if not logged_in:
-    st.info("👉 Please enter valid Employee ID to continue")
-
-else:
-    st.success(f"Welcome {name}")
+if logged_in:
 
     b1_courses = b1_df["Course"].dropna().tolist()
     b2_courses = b2_df["Course"].dropna().tolist()
@@ -780,21 +776,17 @@ else:
     with col1:
         st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
 
-        temp_b1 = st.multiselect("Select 7 courses", b1_courses, key="b1_temp")
+        st.multiselect("Select 7 courses", b1_courses, key="b1")
 
-        if len(temp_b1) > 7:
-            st.warning("⚠️ Only 7 allowed in Basket 1")
-            temp_b1 = temp_b1[:7]
-
-        st.session_state.b1 = temp_b1
+        if len(st.session_state.b1) > 7:
+            st.warning("⚠️ Only 7 allowed")
+            st.session_state.b1 = st.session_state.b1[:7]
 
         st.write(f"{len(st.session_state.b1)} / 7 selected")
 
-        for c in st.session_state.b1:
-            row = b1_df[b1_df["Course"] == c].iloc[0]
-            color = "green" if row["Usage"] < row["Max"] else "red"
-            icon = "🟢" if color == "green" else "🔴"
-            st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
+        with st.expander("View Basket 1 selections"):
+            for c in st.session_state.b1:
+                st.write("✔", c)
 
     # -----------------------------
     # BASKET 2
@@ -802,21 +794,17 @@ else:
     with col2:
         st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
 
-        temp_b2 = st.multiselect("Select 7 courses", b2_courses, key="b2_temp")
+        st.multiselect("Select 7 courses", b2_courses, key="b2")
 
-        if len(temp_b2) > 7:
-            st.warning("⚠️ Only 7 allowed in Basket 2")
-            temp_b2 = temp_b2[:7]
-
-        st.session_state.b2 = temp_b2
+        if len(st.session_state.b2) > 7:
+            st.warning("⚠️ Only 7 allowed")
+            st.session_state.b2 = st.session_state.b2[:7]
 
         st.write(f"{len(st.session_state.b2)} / 7 selected")
 
-        for c in st.session_state.b2:
-            row = b2_df[b2_df["Course"] == c].iloc[0]
-            color = "green" if row["Usage"] < row["Max"] else "red"
-            icon = "🟢" if color == "green" else "🔴"
-            st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
+        with st.expander("View Basket 2 selections"):
+            for c in st.session_state.b2:
+                st.write("✔", c)
 
     # -----------------------------
     # UPDATE USAGE
@@ -843,7 +831,7 @@ else:
         sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated)
 
     # -----------------------------
-    # PDF
+    # PDF GENERATION
     # -----------------------------
     def generate_pdf(emp_id, name, designation, b1, b2):
         buffer = io.BytesIO()
@@ -879,7 +867,7 @@ else:
     if st.button("🚀 Submit Preferences"):
 
         if len(st.session_state.b1) != 7 or len(st.session_state.b2) != 7:
-            st.error("⚠️ Select exactly 7 courses each")
+            st.error("⚠️ Select exactly 7 courses in each basket")
             st.stop()
 
         try:
@@ -894,7 +882,7 @@ else:
                 *st.session_state.b2
             ])
 
-            st.success("Submitted Successfully 🎉")
+            st.success("🎉 Submitted Successfully")
 
             pdf = generate_pdf(
                 emp_id,
