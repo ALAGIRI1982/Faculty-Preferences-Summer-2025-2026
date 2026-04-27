@@ -295,6 +295,8 @@ if st.button("🚀 Submit Preferences"):
     except Exception as e:
         st.error(str(e))'''
 
+
+
 import streamlit as st
 import pandas as pd
 import gspread
@@ -450,55 +452,55 @@ b2_courses = b2_df["Course"].dropna().tolist()
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# BASKET 1 (FIXED LOCK)
+# BASKET 1 (FIXED)
 # -----------------------------
 with col1:
     st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
 
-    st.session_state.b1 = st.multiselect(
+    st.multiselect(
         "Select exactly 7 courses",
         b1_courses,
         key="b1"
     )
 
-    if len(st.session_state.b1) > 7:
+    if len(st.session_state.get("b1", [])) > 7:
         st.session_state.b1 = st.session_state.b1[:7]
         st.warning("🔒 Only 7 courses allowed in Basket 1")
 
-    st.write(f"Selected: {len(st.session_state.b1)} / 7")
+    st.write(f"Selected: {len(st.session_state.get('b1', []))} / 7")
 
-    for c in st.session_state.b1:
+    for c in st.session_state.get("b1", []):
         row = b1_df[b1_df["Course"] == c].iloc[0]
         color = "green" if row["Usage"] < row["Max"] else "red"
         icon = "🟢" if color == "green" else "🔴"
         st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
-# BASKET 2 (FIXED LOCK)
+# BASKET 2 (FIXED)
 # -----------------------------
 with col2:
     st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
 
-    st.session_state.b2 = st.multiselect(
+    st.multiselect(
         "Select exactly 7 courses",
         b2_courses,
         key="b2"
     )
 
-    if len(st.session_state.b2) > 7:
+    if len(st.session_state.get("b2", [])) > 7:
         st.session_state.b2 = st.session_state.b2[:7]
         st.warning("🔒 Only 7 courses allowed in Basket 2")
 
-    st.write(f"Selected: {len(st.session_state.b2)} / 7")
+    st.write(f"Selected: {len(st.session_state.get('b2', []))} / 7")
 
-    for c in st.session_state.b2:
+    for c in st.session_state.get("b2", []):
         row = b2_df[b2_df["Course"] == c].iloc[0]
         color = "green" if row["Usage"] < row["Max"] else "red"
         icon = "🟢" if color == "green" else "🔴"
         st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
-# UPDATE FUNCTION
+# UPDATE USAGE
 # -----------------------------
 def update_usage(sheet_name, selected, df):
     sheet = ss.worksheet(sheet_name)
@@ -530,7 +532,7 @@ if st.button("🚀 Submit Preferences"):
         st.error("Enter valid Employee ID")
         st.stop()
 
-    if len(st.session_state.b1) != 7 or len(st.session_state.b2) != 7:
+    if len(st.session_state.get("b1", [])) != 7 or len(st.session_state.get("b2", [])) != 7:
         st.error("⚠️ Select exactly 7 courses in each basket")
         st.stop()
 
@@ -567,3 +569,4 @@ if st.button("🚀 Submit Preferences"):
 
     except Exception as e:
         st.error(str(e))
+
