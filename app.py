@@ -469,7 +469,7 @@ if emp_id and emp_id in existing_ids:
 # -----------------------------
 st.markdown("""
 <div style='text-align:center; font-size:18px; font-weight:700; margin:10px;'>
-🟢 Low Preferred &nbsp;&nbsp;&nbsp; 🔴 High Preferred
+🟢 Low Preferred Course &nbsp;&nbsp;&nbsp; 🔴 High Preferred Course
 </div>
 """, unsafe_allow_html=True)
 
