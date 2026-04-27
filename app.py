@@ -308,7 +308,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 
-# PDF IMPORTS
+# PDF IMPORTS (FIXED)
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
@@ -432,7 +432,7 @@ def load_employees():
 employees = load_employees()
 
 # -----------------------------
-# PDF FUNCTION (ONLY CHANGED PART)
+# PDF FUNCTION (ONLY FIXED TO TABLE)
 # -----------------------------
 def generate_pdf(emp_id, name, designation, b1, b2):
     buffer = io.BytesIO()
@@ -443,7 +443,7 @@ def generate_pdf(emp_id, name, designation, b1, b2):
     content.append(Paragraph("Faculty Preference Report", styles["Title"]))
     content.append(Spacer(1, 12))
 
-    # INFO TABLE
+    # EMP DETAILS TABLE
     info_data = [
         ["Employee ID", emp_id],
         ["Name", name],
@@ -485,6 +485,8 @@ if emp_id:
         name = row.iloc[0]["Name"]
         designation = row.iloc[0]["Designation"]
         st.success("Employee Found")
+        st.write("Name:", name)
+        st.write("Designation:", designation)
     else:
         st.warning("Invalid Employee ID")
 
@@ -507,6 +509,14 @@ if "b1" not in st.session_state:
 if "b2" not in st.session_state:
     st.session_state.b2 = []
 
+def handle_b1_change():
+    if len(st.session_state.b1) > 7:
+        st.session_state.b1 = st.session_state.b1[:7]
+
+def handle_b2_change():
+    if len(st.session_state.b2) > 7:
+        st.session_state.b2 = st.session_state.b2[:7]
+
 b1_courses = b1_df["Course"].dropna().tolist()
 b2_courses = b2_df["Course"].dropna().tolist()
 
@@ -514,12 +524,12 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
-    st.multiselect("Select exactly 7 courses", b1_courses, key="b1")
+    st.multiselect("Select exactly 7 courses", b1_courses, key="b1", on_change=handle_b1_change)
     st.write(f"Selected: {len(st.session_state.b1)} / 7")
 
 with col2:
     st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
-    st.multiselect("Select exactly 7 courses", b2_courses, key="b2")
+    st.multiselect("Select exactly 7 courses", b2_courses, key="b2", on_change=handle_b2_change)
     st.write(f"Selected: {len(st.session_state.b2)} / 7")
 
 # -----------------------------
@@ -571,7 +581,11 @@ if st.button("🚀 Submit Preferences"):
             *st.session_state.b2
         ])
 
-        st.success("🎉 Submitted Successfully")
+        st.markdown("""
+        <div style="text-align:center;font-size:40px;font-weight:900;color:#16a34a;">
+        🎉 Submitted Successfully 🎉
+        </div>
+        """, unsafe_allow_html=True)
 
         pdf_file = generate_pdf(
             emp_id, name, designation,
