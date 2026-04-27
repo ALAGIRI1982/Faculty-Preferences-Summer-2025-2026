@@ -294,6 +294,9 @@ if st.button("🚀 Submit Preferences"):
 
     except Exception as e:
         st.error(str(e))'''
+
+
+
 import streamlit as st
 import pandas as pd
 import gspread
@@ -362,7 +365,7 @@ st.markdown("""
 st.markdown("<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
 
 # -----------------------------
-# GOOGLE SHEETS
+# GOOGLE SHEETS AUTH
 # -----------------------------
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
@@ -379,7 +382,13 @@ def get_client():
     return gspread.authorize(creds)
 
 client = get_client()
-ss = client.open_by_key(SPREADSHEET_ID)
+
+# ✅ FIX: CACHE SPREADSHEET CONNECTION (IMPORTANT)
+@st.cache_resource
+def get_spreadsheet():
+    return client.open_by_key(SPREADSHEET_ID)
+
+ss = get_spreadsheet()
 
 # -----------------------------
 # LOAD DATA
@@ -441,7 +450,7 @@ if emp_id and emp_id in existing_ids:
     st.stop()
 
 # -----------------------------
-# SESSION INIT
+# SESSION STATE
 # -----------------------------
 if "b1" not in st.session_state:
     st.session_state.b1 = []
@@ -450,16 +459,14 @@ if "b2" not in st.session_state:
     st.session_state.b2 = []
 
 # -----------------------------
-# LOCK FUNCTIONS
+# LIMIT HANDLERS
 # -----------------------------
 def handle_b1_change():
     if len(st.session_state.b1) > 7:
-        st.warning("🔒 Only 7 courses allowed in Basket 1")
         st.session_state.b1 = st.session_state.b1[:7]
 
 def handle_b2_change():
     if len(st.session_state.b2) > 7:
-        st.warning("🔒 Only 7 courses allowed in Basket 2")
         st.session_state.b2 = st.session_state.b2[:7]
 
 # -----------------------------
@@ -476,16 +483,16 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
 
-    b1_selected = st.multiselect(
+    st.multiselect(
         "Select exactly 7 courses",
         b1_courses,
         key="b1",
         on_change=handle_b1_change
     )
 
-    st.write(f"Selected: {len(b1_selected)} / 7")
+    st.write(f"Selected: {len(st.session_state.b1)} / 7")
 
-    for c in b1_selected:
+    for c in st.session_state.b1:
         row = b1_df[b1_df["Course"] == c].iloc[0]
         color = "green" if row["Usage"] < row["Max"] else "red"
         icon = "🟢" if color == "green" else "🔴"
@@ -497,16 +504,16 @@ with col1:
 with col2:
     st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
 
-    b2_selected = st.multiselect(
+    st.multiselect(
         "Select exactly 7 courses",
         b2_courses,
         key="b2",
         on_change=handle_b2_change
     )
 
-    st.write(f"Selected: {len(b2_selected)} / 7")
+    st.write(f"Selected: {len(st.session_state.b2)} / 7")
 
-    for c in b2_selected:
+    for c in st.session_state.b2:
         row = b2_df[b2_df["Course"] == c].iloc[0]
         color = "green" if row["Usage"] < row["Max"] else "red"
         icon = "🟢" if color == "green" else "🔴"
@@ -579,6 +586,3 @@ if st.button("🚀 Submit Preferences"):
 
     except Exception as e:
         st.error(str(e))
-
-
-
