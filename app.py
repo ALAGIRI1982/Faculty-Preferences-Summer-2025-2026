@@ -436,6 +436,28 @@ if emp_id and emp_id in existing_ids:
     st.stop()
 
 # -----------------------------
+# SESSION INIT
+# -----------------------------
+if "b1" not in st.session_state:
+    st.session_state.b1 = []
+
+if "b2" not in st.session_state:
+    st.session_state.b2 = []
+
+# -----------------------------
+# LOCK FUNCTIONS
+# -----------------------------
+def handle_b1_change():
+    if len(st.session_state.b1) > 7:
+        st.warning("🔒 Only 7 courses allowed in Basket 1")
+        st.session_state.b1 = st.session_state.b1[:7]
+
+def handle_b2_change():
+    if len(st.session_state.b2) > 7:
+        st.warning("🔒 Only 7 courses allowed in Basket 2")
+        st.session_state.b2 = st.session_state.b2[:7]
+
+# -----------------------------
 # COURSE LIST
 # -----------------------------
 b1_courses = b1_df["Course"].dropna().tolist()
@@ -452,11 +474,12 @@ with col1:
     b1_selected = st.multiselect(
         "Select exactly 7 courses",
         b1_courses,
-        placeholder="Search and select courses..."
+        key="b1",
+        on_change=handle_b1_change
     )
 
     if len(b1_selected) == 7:
-        st.info("🔒 Maximum 7 courses selected")
+        st.info("🔒 Maximum reached. Remove one to select another.")
 
     st.write(f"Selected: {len(b1_selected)} / 7")
 
@@ -475,11 +498,12 @@ with col2:
     b2_selected = st.multiselect(
         "Select exactly 7 courses",
         b2_courses,
-        placeholder="Search and select courses..."
+        key="b2",
+        on_change=handle_b2_change
     )
 
     if len(b2_selected) == 7:
-        st.info("🔒 Maximum 7 courses selected")
+        st.info("🔒 Maximum reached. Remove one to select another.")
 
     st.write(f"Selected: {len(b2_selected)} / 7")
 
@@ -522,24 +546,23 @@ if st.button("🚀 Submit Preferences"):
         st.error("Enter valid Employee ID")
         st.stop()
 
-    if len(b1_selected) != 7 or len(b2_selected) != 7:
-        st.error("⚠️ You must select exactly 7 courses in each basket")
+    if len(st.session_state.b1) != 7 or len(st.session_state.b2) != 7:
+        st.error("⚠️ Select exactly 7 courses in each basket")
         st.stop()
 
     try:
-        update_usage("Basket1", b1_selected, b1_df)
-        update_usage("Basket2", b2_selected, b2_df)
+        update_usage("Basket1", st.session_state.b1, b1_df)
+        update_usage("Basket2", st.session_state.b2, b2_df)
 
         response_sheet.append_row([
             emp_id,
             name,
             designation,
-            *b1_selected,
-            *b2_selected
+            *st.session_state.b1,
+            *st.session_state.b2
         ])
 
         st.success("✅ Submitted Successfully")
-        st.stop()
 
     except Exception as e:
         st.error(str(e))
