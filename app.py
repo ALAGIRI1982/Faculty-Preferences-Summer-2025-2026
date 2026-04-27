@@ -724,21 +724,20 @@ def load_employees():
 employees = load_employees()
 
 # -----------------------------
-# EMP INPUT
+# INPUT (LOGIN)
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
 name = None
 designation = None
+logged_in = False
 
 if emp_id:
     row = employees[employees["EmpID"] == emp_id.strip()]
     if not row.empty:
         name = row.iloc[0]["Name"]
         designation = row.iloc[0]["Designation"]
-        st.success("Employee Found")
-        st.write("Name:", name)
-        st.write("Designation:", designation)
+        logged_in = True
     else:
         st.warning("Invalid Employee ID")
 
@@ -753,12 +752,6 @@ if emp_id and emp_id in existing_ids:
     st.stop()
 
 # -----------------------------
-# COURSE LIST
-# -----------------------------
-b1_courses = b1_df["Course"].dropna().tolist()
-b2_courses = b2_df["Course"].dropna().tolist()
-
-# -----------------------------
 # SESSION STATE
 # -----------------------------
 if "b1" not in st.session_state:
@@ -768,155 +761,155 @@ if "b2" not in st.session_state:
     st.session_state.b2 = []
 
 # -----------------------------
-# BASKET 1 (STRICT FIX)
+# SHOW UI ONLY AFTER LOGIN
 # -----------------------------
-col1, col2 = st.columns(2)
+if not logged_in:
+    st.info("👉 Please enter valid Employee ID to continue")
 
-with col1:
-    st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
+else:
+    st.success(f"Welcome {name}")
 
-    temp_b1 = st.multiselect(
-        "Select exactly 7 courses",
-        b1_courses,
-        key="b1_temp"
-    )
+    b1_courses = b1_df["Course"].dropna().tolist()
+    b2_courses = b2_df["Course"].dropna().tolist()
 
-    if len(temp_b1) > 7:
-        st.warning("⚠️ Only 7 courses allowed in Basket 1")
-        temp_b1 = temp_b1[:7]
+    col1, col2 = st.columns(2)
 
-    st.session_state.b1 = temp_b1
+    # -----------------------------
+    # BASKET 1
+    # -----------------------------
+    with col1:
+        st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
 
-    st.write(f"{len(st.session_state.b1)} / 7 selected")
+        temp_b1 = st.multiselect("Select 7 courses", b1_courses, key="b1_temp")
 
-    for c in st.session_state.b1:
-        row = b1_df[b1_df["Course"] == c].iloc[0]
-        color = "green" if row["Usage"] < row["Max"] else "red"
-        icon = "🟢" if color == "green" else "🔴"
-        st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
+        if len(temp_b1) > 7:
+            st.warning("⚠️ Only 7 allowed in Basket 1")
+            temp_b1 = temp_b1[:7]
 
-# -----------------------------
-# BASKET 2 (STRICT FIX)
-# -----------------------------
-with col2:
-    st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
+        st.session_state.b1 = temp_b1
 
-    temp_b2 = st.multiselect(
-        "Select exactly 7 courses",
-        b2_courses,
-        key="b2_temp"
-    )
+        st.write(f"{len(st.session_state.b1)} / 7 selected")
 
-    if len(temp_b2) > 7:
-        st.warning("⚠️ Only 7 courses allowed in Basket 2")
-        temp_b2 = temp_b2[:7]
+        for c in st.session_state.b1:
+            row = b1_df[b1_df["Course"] == c].iloc[0]
+            color = "green" if row["Usage"] < row["Max"] else "red"
+            icon = "🟢" if color == "green" else "🔴"
+            st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
 
-    st.session_state.b2 = temp_b2
+    # -----------------------------
+    # BASKET 2
+    # -----------------------------
+    with col2:
+        st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
 
-    st.write(f"{len(st.session_state.b2)} / 7 selected")
+        temp_b2 = st.multiselect("Select 7 courses", b2_courses, key="b2_temp")
 
-    for c in st.session_state.b2:
-        row = b2_df[b2_df["Course"] == c].iloc[0]
-        color = "green" if row["Usage"] < row["Max"] else "red"
-        icon = "🟢" if color == "green" else "🔴"
-        st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
+        if len(temp_b2) > 7:
+            st.warning("⚠️ Only 7 allowed in Basket 2")
+            temp_b2 = temp_b2[:7]
 
-# -----------------------------
-# UPDATE USAGE
-# -----------------------------
-def update_usage(sheet_name, selected, df):
-    sheet = ss.worksheet(sheet_name)
-    data = sheet.get_all_values()
+        st.session_state.b2 = temp_b2
 
-    headers = data[0]
-    rows = data[1:]
+        st.write(f"{len(st.session_state.b2)} / 7 selected")
 
-    c_idx = headers.index("Course")
-    u_idx = headers.index("Usage")
+        for c in st.session_state.b2:
+            row = b2_df[b2_df["Course"] == c].iloc[0]
+            color = "green" if row["Usage"] < row["Max"] else "red"
+            icon = "🟢" if color == "green" else "🔴"
+            st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
 
-    usage = {r[c_idx]: int(r[u_idx]) if r[u_idx] else 0 for r in rows}
-    max_map = dict(zip(df["Course"], df["Max"]))
+    # -----------------------------
+    # UPDATE USAGE
+    # -----------------------------
+    def update_usage(sheet_name, selected, df):
+        sheet = ss.worksheet(sheet_name)
+        data = sheet.get_all_values()
 
-    for c in selected:
-        if usage[c] < max_map[c]:
-            usage[c] += 1
+        headers = data[0]
+        rows = data[1:]
 
-    updated = [[usage[r[c_idx]]] for r in rows]
-    col_letter = chr(65 + u_idx)
-    sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated)
+        c_idx = headers.index("Course")
+        u_idx = headers.index("Usage")
 
-# -----------------------------
-# PDF GENERATION
-# -----------------------------
-def generate_pdf(emp_id, name, designation, b1, b2):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    content = []
+        usage = {r[c_idx]: int(r[u_idx]) if r[u_idx] else 0 for r in rows}
+        max_map = dict(zip(df["Course"], df["Max"]))
 
-    content.append(Paragraph("Faculty Preference Report", styles["Title"]))
-    content.append(Spacer(1, 12))
+        for c in selected:
+            if usage[c] < max_map[c]:
+                usage[c] += 1
 
-    content.append(Paragraph(f"<b>Employee ID:</b> {emp_id}", styles["Normal"]))
-    content.append(Paragraph(f"<b>Name:</b> {name}", styles["Normal"]))
-    content.append(Paragraph(f"<b>Designation:</b> {designation}", styles["Normal"]))
-    content.append(Spacer(1, 12))
+        updated = [[usage[r[c_idx]]] for r in rows]
+        col_letter = chr(65 + u_idx)
+        sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated)
 
-    content.append(Paragraph("<b>Basket 1:</b>", styles["Heading2"]))
-    for c in b1:
-        content.append(Paragraph(f"• {c}", styles["Normal"]))
+    # -----------------------------
+    # PDF
+    # -----------------------------
+    def generate_pdf(emp_id, name, designation, b1, b2):
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        content = []
 
-    content.append(Spacer(1, 10))
+        content.append(Paragraph("Faculty Preference Report", styles["Title"]))
+        content.append(Spacer(1, 12))
 
-    content.append(Paragraph("<b>Basket 2:</b>", styles["Heading2"]))
-    for c in b2:
-        content.append(Paragraph(f"• {c}", styles["Normal"]))
+        content.append(Paragraph(f"<b>Employee ID:</b> {emp_id}", styles["Normal"]))
+        content.append(Paragraph(f"<b>Name:</b> {name}", styles["Normal"]))
+        content.append(Paragraph(f"<b>Designation:</b> {designation}", styles["Normal"]))
+        content.append(Spacer(1, 12))
 
-    doc.build(content)
-    buffer.seek(0)
-    return buffer
+        content.append(Paragraph("<b>Basket 1:</b>", styles["Heading2"]))
+        for c in b1:
+            content.append(Paragraph(f"• {c}", styles["Normal"]))
 
-# -----------------------------
-# SUBMIT
-# -----------------------------
-if st.button("🚀 Submit Preferences"):
+        content.append(Spacer(1, 10))
 
-    if name is None:
-        st.error("Enter valid Employee ID")
-        st.stop()
+        content.append(Paragraph("<b>Basket 2:</b>", styles["Heading2"]))
+        for c in b2:
+            content.append(Paragraph(f"• {c}", styles["Normal"]))
 
-    if len(st.session_state.b1) != 7 or len(st.session_state.b2) != 7:
-        st.error("⚠️ Select exactly 7 courses in each basket")
-        st.stop()
+        doc.build(content)
+        buffer.seek(0)
+        return buffer
 
-    try:
-        update_usage("Basket1", st.session_state.b1, b1_df)
-        update_usage("Basket2", st.session_state.b2, b2_df)
+    # -----------------------------
+    # SUBMIT
+    # -----------------------------
+    if st.button("🚀 Submit Preferences"):
 
-        response_sheet.append_row([
-            emp_id,
-            name,
-            designation,
-            *st.session_state.b1,
-            *st.session_state.b2
-        ])
+        if len(st.session_state.b1) != 7 or len(st.session_state.b2) != 7:
+            st.error("⚠️ Select exactly 7 courses each")
+            st.stop()
 
-        st.success("Submitted Successfully 🎉")
+        try:
+            update_usage("Basket1", st.session_state.b1, b1_df)
+            update_usage("Basket2", st.session_state.b2, b2_df)
 
-        pdf = generate_pdf(
-            emp_id,
-            name,
-            designation,
-            st.session_state.b1,
-            st.session_state.b2
-        )
+            response_sheet.append_row([
+                emp_id,
+                name,
+                designation,
+                *st.session_state.b1,
+                *st.session_state.b2
+            ])
 
-        st.download_button(
-            "📄 Download PDF Report",
-            data=pdf,
-            file_name=f"{emp_id}_report.pdf",
-            mime="application/pdf"
-        )
+            st.success("Submitted Successfully 🎉")
 
-    except Exception as e:
-        st.error(str(e))
+            pdf = generate_pdf(
+                emp_id,
+                name,
+                designation,
+                st.session_state.b1,
+                st.session_state.b2
+            )
+
+            st.download_button(
+                "📄 Download PDF",
+                data=pdf,
+                file_name=f"{emp_id}_report.pdf",
+                mime="application/pdf"
+            )
+
+        except Exception as e:
+            st.error(str(e))
