@@ -60,7 +60,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='title'>🎓 Faculty Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
+st.markdown("<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
 
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
