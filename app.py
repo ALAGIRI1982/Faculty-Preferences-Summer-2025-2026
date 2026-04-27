@@ -60,7 +60,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
+'''# -----------------------------
 # TITLE + LEGEND
 # -----------------------------
 st.markdown("<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
@@ -71,7 +71,7 @@ st.markdown("""
 &nbsp;&nbsp;&nbsp;
 <span style='color:#dc2626;'>● High Preferred Course</span>
 </div>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)'''
 
 # -----------------------------
 # GOOGLE SHEETS
