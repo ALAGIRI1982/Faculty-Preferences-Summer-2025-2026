@@ -349,7 +349,7 @@ st.markdown("""
 st.markdown("<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
 
 st.markdown("""
-<div style='text-align:center; font-size:18px; font-weight:700; margin-top:5px; margin-bottom:20px;'>
+<div style='text-align:center; font-size:18px; font-weight:700; margin-bottom:20px;'>
 <span style='color:#16a34a;'>● Low Preferred Course</span>
 &nbsp;&nbsp;&nbsp;
 <span style='color:#dc2626;'>● High Preferred Course</span>
@@ -357,12 +357,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# SUCCESS PLACEHOLDER
-# -----------------------------
-success_placeholder = st.empty()
-
-# -----------------------------
-# GOOGLE SHEETS CONFIG
+# GOOGLE SHEETS
 # -----------------------------
 SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 
@@ -379,12 +374,7 @@ def get_client():
     return gspread.authorize(creds)
 
 client = get_client()
-
-@st.cache_resource
-def get_spreadsheet():
-    return client.open_by_key(SPREADSHEET_ID)
-
-ss = get_spreadsheet()
+ss = client.open_by_key(SPREADSHEET_ID)
 
 # -----------------------------
 # LOAD DATA
@@ -398,11 +388,6 @@ def load_sheet(name):
 def clean_df(df):
     df["Usage"] = pd.to_numeric(df.get("Usage", 0), errors="coerce").fillna(0).astype(int)
     df["Max"] = pd.to_numeric(df.get("Max", 0), errors="coerce").fillna(0).astype(int)
-
-    if (df["Max"] <= 0).any():
-        st.error("Max must be > 0")
-        st.stop()
-
     return df
 
 b1_df = clean_df(load_sheet("Basket1"))
@@ -422,43 +407,21 @@ def load_employees():
 employees = load_employees()
 
 # -----------------------------
-# SESSION STATE
-# -----------------------------
-if "name" not in st.session_state:
-    st.session_state.name = None
-    st.session_state.designation = None
-    st.session_state.submitted = False
-
-# -----------------------------
-# STOP IF SUBMITTED
-# -----------------------------
-if st.session_state.submitted:
-    success_placeholder.markdown("""
-    <div style="display:flex; justify-content:center; align-items:center; height:400px;">
-        <div style="background:#16a34a; color:white; padding:30px 60px; border-radius:15px;
-        font-size:24px; font-weight:bold;">
-            ✅ Submitted Successfully
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.stop()
-
-# -----------------------------
 # EMP INPUT
 # -----------------------------
 emp_id = st.text_input("Enter Employee ID")
 
+name = None
+designation = None
+
 if emp_id:
-    emp_id = emp_id.strip()
-    row = employees[employees["EmpID"] == emp_id]
-
+    row = employees[employees["EmpID"] == emp_id.strip()]
     if not row.empty:
-        st.session_state.name = row.iloc[0]["Name"]
-        st.session_state.designation = row.iloc[0]["Designation"]
-
+        name = row.iloc[0]["Name"]
+        designation = row.iloc[0]["Designation"]
         st.success("Employee Found")
-        st.write("Name:", st.session_state.name)
-        st.write("Designation:", st.session_state.designation)
+        st.write("Name:", name)
+        st.write("Designation:", designation)
     else:
         st.warning("Invalid Employee ID")
 
@@ -486,21 +449,22 @@ col1, col2 = st.columns(2)
 with col1:
     st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
 
-    b1_selected = st.multiselect("Select exactly 7 courses", b1_courses, key="b1")
+    b1_selected = st.multiselect(
+        "Select exactly 7 courses",
+        b1_courses,
+        placeholder="Search and select courses..."
+    )
 
-    if len(b1_selected) > 7:
-        st.warning("⚠️ Only 7 courses allowed in Basket 1")
-        st.session_state.b1 = b1_selected[:7]
-        b1_selected = st.session_state.b1
+    if len(b1_selected) == 7:
+        st.info("🔒 Maximum 7 courses selected")
 
     st.write(f"Selected: {len(b1_selected)} / 7")
 
     for c in b1_selected:
         row = b1_df[b1_df["Course"] == c].iloc[0]
-        if row["Usage"] < row["Max"]:
-            st.markdown(f"<div class='green'>🟢 {c}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='red'>🔴 {c}</div>", unsafe_allow_html=True)
+        color = "green" if row["Usage"] < row["Max"] else "red"
+        icon = "🟢" if color == "green" else "🔴"
+        st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # BASKET 2
@@ -508,21 +472,22 @@ with col1:
 with col2:
     st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
 
-    b2_selected = st.multiselect("Select exactly 7 courses", b2_courses, key="b2")
+    b2_selected = st.multiselect(
+        "Select exactly 7 courses",
+        b2_courses,
+        placeholder="Search and select courses..."
+    )
 
-    if len(b2_selected) > 7:
-        st.warning("⚠️ Only 7 courses allowed in Basket 2")
-        st.session_state.b2 = b2_selected[:7]
-        b2_selected = st.session_state.b2
+    if len(b2_selected) == 7:
+        st.info("🔒 Maximum 7 courses selected")
 
     st.write(f"Selected: {len(b2_selected)} / 7")
 
     for c in b2_selected:
         row = b2_df[b2_df["Course"] == c].iloc[0]
-        if row["Usage"] < row["Max"]:
-            st.markdown(f"<div class='green'>🟢 {c}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='red'>🔴 {c}</div>", unsafe_allow_html=True)
+        color = "green" if row["Usage"] < row["Max"] else "red"
+        icon = "🟢" if color == "green" else "🔴"
+        st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # UPDATE USAGE
@@ -553,12 +518,12 @@ def update_usage(sheet_name, selected, df):
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
-    if st.session_state.name is None:
+    if name is None:
         st.error("Enter valid Employee ID")
         st.stop()
 
     if len(b1_selected) != 7 or len(b2_selected) != 7:
-        st.error("Select exactly 7 courses in each basket")
+        st.error("⚠️ You must select exactly 7 courses in each basket")
         st.stop()
 
     try:
@@ -567,14 +532,14 @@ if st.button("🚀 Submit Preferences"):
 
         response_sheet.append_row([
             emp_id,
-            st.session_state.name,
-            st.session_state.designation,
+            name,
+            designation,
             *b1_selected,
             *b2_selected
         ])
 
-        st.session_state.submitted = True
-        st.rerun()
+        st.success("✅ Submitted Successfully")
+        st.stop()
 
     except Exception as e:
         st.error(str(e))
