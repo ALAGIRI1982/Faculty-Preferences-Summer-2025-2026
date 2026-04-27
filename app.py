@@ -433,7 +433,7 @@ def load_employees():
 employees = load_employees()
 
 # -----------------------------
-# ✅ PDF FUNCTION (TABLE FORMAT)
+# PDF FUNCTION (ONLY FIXED PART)
 # -----------------------------
 def generate_pdf(emp_id, name, designation, b1, b2):
     buffer = io.BytesIO()
@@ -589,9 +589,3 @@ if st.button("🚀 Submit Preferences"):
 
     except Exception as e:
         st.error(str(e))
-
-
-
-
-
-
