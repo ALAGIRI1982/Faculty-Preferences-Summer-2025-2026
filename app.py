@@ -346,12 +346,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# TITLE
+# TITLE + LEGEND
 # -----------------------------
 st.markdown("<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>", unsafe_allow_html=True)
 
+st.markdown("""
+<div style='text-align:center; font-size:18px; font-weight:700; margin:10px;'>
+<span style='color:#16a34a;'>● Low Preferred Course</span>
+&nbsp;&nbsp;&nbsp;
+<span style='color:#dc2626;'>● High Preferred Course</span>
+</div>
+""", unsafe_allow_html=True)
+
 # -----------------------------
-# SUCCESS SCREEN
+# SUCCESS SCREEN (CENTER)
 # -----------------------------
 if "submitted" not in st.session_state:
     st.session_state.submitted = False
@@ -501,10 +509,14 @@ with col1:
         on_change=handle_b1_change
     )
 
-    if len(b1_selected) == 7:
-        st.info("🔒 Maximum reached. Remove one to select another.")
-
     st.write(f"Selected: {len(b1_selected)} / 7")
+
+    for c in b1_selected:
+        row = b1_df[b1_df["Course"] == c].iloc[0]
+        if row["Usage"] < row["Max"]:
+            st.markdown(f"<div class='green'>🟢 {c}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='red'>🔴 {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # BASKET 2
@@ -519,10 +531,14 @@ with col2:
         on_change=handle_b2_change
     )
 
-    if len(b2_selected) == 7:
-        st.info("🔒 Maximum reached. Remove one to select another.")
-
     st.write(f"Selected: {len(b2_selected)} / 7")
+
+    for c in b2_selected:
+        row = b2_df[b2_df["Course"] == c].iloc[0]
+        if row["Usage"] < row["Max"]:
+            st.markdown(f"<div class='green'>🟢 {c}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='red'>🔴 {c}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # UPDATE USAGE
@@ -573,7 +589,6 @@ if st.button("🚀 Submit Preferences"):
             *st.session_state.b2
         ])
 
-        # ✅ Trigger center success screen
         st.session_state.submitted = True
         st.rerun()
 
