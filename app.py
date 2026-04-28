@@ -168,7 +168,7 @@ def generate_pdf(emp_id, name, designation, b1, b2):
     return buffer
 
 # -----------------------------
-# EMP INPUT + DETAILS SIDE BY SIDE
+# EMP INPUT + DETAILS
 # -----------------------------
 col_emp, col_details = st.columns([1, 2])
 
@@ -188,7 +188,6 @@ with col_details:
             st.success("Employee Found")
             st.markdown("### 👤 Employee Details")
 
-            # ✅ FIX: SAME LINE DISPLAY
             st.markdown(
                 f"""
                 <div style="display:flex; gap:40px; font-size:18px; font-weight:600;">
@@ -198,7 +197,6 @@ with col_details:
                 """,
                 unsafe_allow_html=True
             )
-
         else:
             st.warning("Invalid Employee ID")
 
@@ -293,7 +291,7 @@ def update_usage(sheet_name, selected, df):
     sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated)
 
 # -----------------------------
-# SUBMIT
+# SUBMIT (UI UPDATED - SAME LINE OUTPUT)
 # -----------------------------
 if st.button("🚀 Submit Preferences"):
 
@@ -321,18 +319,22 @@ if st.button("🚀 Submit Preferences"):
             st.session_state.b2
         )
 
-        st.download_button(
-            "📄 Download PDF Report",
-            data=pdf_file,
-            file_name=f"{emp_id}_preferences.pdf",
-            mime="application/pdf"
-        )
+        col_a, col_b, col_c = st.columns([1, 1, 2])
 
-        st.success("🎉 Submitted Successfully")
+        with col_a:
+            st.download_button(
+                "📄 Download PDF Report",
+                data=pdf_file,
+                file_name=f"{emp_id}_preferences.pdf",
+                mime="application/pdf"
+            )
+
+        with col_b:
+            st.success("🎉 Submitted Successfully")
 
     except Exception as e:
         st.error(str(e))'''
-#-----------------------------------------------------
+#-------------------------------------------------------------
 import streamlit as st
 import pandas as pd
 import gspread
@@ -626,9 +628,14 @@ def update_usage(sheet_name, selected, df):
     sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated)
 
 # -----------------------------
-# SUBMIT (UI UPDATED - SAME LINE OUTPUT)
+# SUBMIT (RIGHT SIDE UI FIXED)
 # -----------------------------
-if st.button("🚀 Submit Preferences"):
+col_submit, col_download, col_status = st.columns([1, 1, 1])
+
+with col_submit:
+    submit_clicked = st.button("🚀 Submit Preferences")
+
+if submit_clicked:
 
     if name is None:
         st.error("Enter valid Employee ID")
@@ -654,9 +661,7 @@ if st.button("🚀 Submit Preferences"):
             st.session_state.b2
         )
 
-        col_a, col_b, col_c = st.columns([1, 1, 2])
-
-        with col_a:
+        with col_download:
             st.download_button(
                 "📄 Download PDF Report",
                 data=pdf_file,
@@ -664,7 +669,7 @@ if st.button("🚀 Submit Preferences"):
                 mime="application/pdf"
             )
 
-        with col_b:
+        with col_status:
             st.success("🎉 Submitted Successfully")
 
     except Exception as e:
