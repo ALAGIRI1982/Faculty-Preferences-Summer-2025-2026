@@ -646,6 +646,7 @@ if st.button("🚀 Submit Preferences"):
     except Exception as e:
         st.error(str(e))'''
 
+
 import streamlit as st
 import pandas as pd
 import gspread
@@ -816,7 +817,7 @@ def generate_pdf(emp_id, name, designation, b1, b2):
     return buffer
 
 # -----------------------------
-# EMP INPUT + DETAILS (UPDATED)
+# EMP INPUT + DETAILS (FIXED SAME LINE)
 # -----------------------------
 col_emp, col_details = st.columns([1, 2])
 
@@ -836,12 +837,15 @@ with col_details:
             st.success("Employee Found")
             st.markdown("### 👤 Employee Details")
 
-            c1, c2 = st.columns(2)
-            with c1:
-                st.write("**Name:**", name)
-            with c2:
-                st.write("**Designation:**", designation)
-
+            st.markdown(
+                f"""
+                <div style="display:flex; gap:40px; font-size:18px; font-weight:600;">
+                    <div>👤 Name: {name}</div>
+                    <div>💼 Designation: {designation}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         else:
             st.warning("Invalid Employee ID")
 
@@ -958,9 +962,11 @@ if st.button("🚀 Submit Preferences"):
             *st.session_state.b2
         ])
 
-        pdf_file = generate_pdf(emp_id, name, designation,
-                                 st.session_state.b1,
-                                 st.session_state.b2)
+        pdf_file = generate_pdf(
+            emp_id, name, designation,
+            st.session_state.b1,
+            st.session_state.b2
+        )
 
         st.download_button(
             "📄 Download PDF Report",
