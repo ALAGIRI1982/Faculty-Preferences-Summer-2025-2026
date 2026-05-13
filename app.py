@@ -338,7 +338,4 @@ if submit_clicked:
     except Exception as e:
         st.error(str(e))
        
-'''import streamlit as st
 
-st.error("⛔ Preference Submission Closed")
-st.stop()'''
