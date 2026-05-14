@@ -337,8 +337,6 @@ if submit_clicked:
 
     except Exception as e:
         st.error(str(e))
-'''import streamlit as st
-st.error("⛔ Application Closed")
-st.stop()'''
+
        
 
