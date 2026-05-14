@@ -1,4 +1,4 @@
-'''import streamlit as st
+import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
@@ -336,10 +336,10 @@ if submit_clicked:
             st.success("🎉 Submitted Successfully")
 
     except Exception as e:
-        st.error(str(e))'''
-import streamlit as st
+        st.error(str(e))
+'''import streamlit as st
 
 st.error("⛔ Application Closed")
-st.stop()
+st.stop()'''
        
 
