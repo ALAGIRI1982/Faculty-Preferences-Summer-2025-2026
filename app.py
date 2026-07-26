@@ -394,8 +394,6 @@ st.markdown(
     color:white;
     font-weight:bold;
 }
-.green { color:#16a34a; font-weight:600; }
-.red { color:#dc2626; font-weight:600; }
 .stButton>button {
     background: linear-gradient(90deg,#7c3aed,#ec4899);
     color:white;
@@ -442,31 +440,21 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD DATA
+# LOAD COURSE BASKETS
 # -----------------------------
 @st.cache_data(ttl=60)
-def load_sheet(name):
-    sheet = ss.worksheet(name)
+def load_courses(sheet_name):
+    sheet = ss.worksheet(sheet_name)
     data = sheet.get_all_values()
     if not data or len(data) < 2:
-        return pd.DataFrame(columns=["Course", "Usage", "Max"])
+        return []
     
-    headers = [str(h).strip() for h in data[0]]
-    return pd.DataFrame(data[1:], columns=headers)
+    # Extract row items from the first column starting after headers
+    courses = [str(row[0]).strip() for row in data[1:] if row and str(row[0]).strip()]
+    return courses
 
-def clean_df(df):
-    # Flexible column matching
-    course_col = next((c for c in df.columns if "course" in str(c).strip().lower()), "Course")
-    usage_col = next((c for c in df.columns if "usage" in str(c).strip().lower()), "Usage")
-    max_col = next((c for c in df.columns if "max" in str(c).strip().lower()), "Max")
-
-    df["Usage"] = pd.to_numeric(df.get(usage_col, 0), errors="coerce").fillna(0).astype(int)
-    df["Max"] = pd.to_numeric(df.get(max_col, 0), errors="coerce").fillna(0).astype(int)
-    df["Course"] = df.get(course_col, "").astype(str).str.strip()
-    return df
-
-b1_df = clean_df(load_sheet("Basket1"))
-b2_df = clean_df(load_sheet("Basket2"))
+b1_courses = load_courses("Basket1")
+b2_courses = load_courses("Basket2")
 
 # -----------------------------
 # EMPLOYEE DATA
@@ -481,7 +469,7 @@ def load_employees():
     headers = [str(h).strip() for h in data[0]]
     df = pd.DataFrame(data[1:], columns=headers)
     
-    emp_col = next((c for c in df.columns if "emp" in str(c).strip().lower() or "id" in str(c).strip().lower()), "EmpID")
+    emp_col = next((c for c in df.columns if "emp" in str(c).strip().lower() or "id" in str(c).strip().lower()), df.columns[0])
     df["EmpID"] = df[emp_col].astype(str).str.strip()
     return df
 
@@ -542,8 +530,8 @@ with col_details:
     if emp_id:
         row = employees[employees["EmpID"] == emp_id.strip()]
         if not row.empty:
-            name_col = next((c for c in row.columns if "name" in str(c).strip().lower()), "Name")
-            desig_col = next((c for c in row.columns if "desig" in str(c).strip().lower()), "Designation")
+            name_col = next((c for c in row.columns if "name" in str(c).strip().lower()), row.columns[1])
+            desig_col = next((c for c in row.columns if "desig" in str(c).strip().lower()), row.columns[2])
             
             name = row.iloc[0].get(name_col, "")
             designation = row.iloc[0].get(desig_col, "")
@@ -574,7 +562,7 @@ if emp_id and emp_id.strip() in existing_ids:
     st.stop()
 
 # -----------------------------
-# SESSION STATE
+# SESSION STATE & HANDLERS
 # -----------------------------
 if "b1" not in st.session_state:
     st.session_state.b1 = []
@@ -593,79 +581,29 @@ def handle_b2_change():
     if len(st.session_state.b2) > 7:
         st.session_state.b2 = st.session_state.b2[:7]
 
-b1_courses = b1_df["Course"].tolist()
-b2_courses = b2_df["Course"].tolist()
-
 col1, col2 = st.columns(2)
 
 # -----------------------------
-# BASKET 1
+# BASKET 1 SELECTION
 # -----------------------------
 with col1:
     st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
-
     st.multiselect("Select exactly 7 courses", b1_courses, key="b1", on_change=handle_b1_change)
     st.write(f"Selected: {len(st.session_state.b1)} / 7")
 
     for c in st.session_state.b1:
-        match = b1_df[b1_df["Course"].str.strip() == str(c).strip()]
-        if not match.empty:
-            row = match.iloc[0]
-            color = "green" if row["Usage"] < row["Max"] else "red"
-            icon = "🟢" if color == "green" else "🔴"
-            st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
+        st.markdown(f"• {c}")
 
 # -----------------------------
-# BASKET 2
+# BASKET 2 SELECTION
 # -----------------------------
 with col2:
     st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
-
     st.multiselect("Select exactly 7 courses", b2_courses, key="b2", on_change=handle_b2_change)
     st.write(f"Selected: {len(st.session_state.b2)} / 7")
 
     for c in st.session_state.b2:
-        match = b2_df[b2_df["Course"].str.strip() == str(c).strip()]
-        if not match.empty:
-            row = match.iloc[0]
-            color = "green" if row["Usage"] < row["Max"] else "red"
-            icon = "🟢" if color == "green" else "🔴"
-            st.markdown(f"<div class='{color}'>{icon} {c}</div>", unsafe_allow_html=True)
-
-# -----------------------------
-# UPDATE USAGE (SAFE LOOKUP)
-# -----------------------------
-def update_usage(sheet_name, selected, df):
-    sheet = ss.worksheet(sheet_name)
-    data = sheet.get_all_values()
-    if not data or len(data) < 2:
-        return
-
-    # Clean headers to safely find column positions
-    clean_headers = [str(h).strip().lower() for h in data[0]]
-
-    # Safe index lookup matching substrings
-    c_idx = next((i for i, h in enumerate(clean_headers) if "course" in h), None)
-    u_idx = next((i for i, h in enumerate(clean_headers) if "usage" in h or "count" in h), None)
-
-    if c_idx is None or u_idx is None:
-        raise ValueError(
-            f"Worksheet '{sheet_name}' must have headers for 'Course' and 'Usage'. Found: {data[0]}"
-        )
-
-    rows = data[1:]
-    usage = {r[c_idx].strip(): int(r[u_idx]) if len(r) > u_idx and r[u_idx].isdigit() else 0 for r in rows}
-    max_map = dict(zip(df["Course"], df["Max"]))
-
-    for c in selected:
-        c_str = str(c).strip()
-        if c_str in usage and c_str in max_map:
-            if usage[c_str] < max_map[c_str]:
-                usage[c_str] += 1
-
-    updated = [[usage.get(r[c_idx].strip(), 0)] for r in rows]
-    col_letter = chr(65 + u_idx)
-    sheet.update(f"{col_letter}2:{col_letter}{len(rows)+1}", updated)
+        st.markdown(f"• {c}")
 
 # -----------------------------
 # SUBMIT & DOWNLOAD
@@ -686,9 +624,6 @@ if submit_clicked:
 
     try:
         with st.spinner("Submitting..."):
-            update_usage("Basket1", st.session_state.b1, b1_df)
-            update_usage("Basket2", st.session_state.b2, b2_df)
-
             response_sheet.append_row([
                 emp_id, name, designation,
                 *st.session_state.b1,
@@ -701,15 +636,13 @@ if submit_clicked:
                 st.session_state.b2
             )
 
-            st.cache_data.clear()
-
         with col_status:
             st.success("🎉 Submitted Successfully")
 
     except Exception as e:
         st.error(f"Error submitting: {e}")
 
-# Render download button if PDF is ready
+# Render download button if PDF generation succeeded
 if st.session_state.pdf_buffer:
     with col_download:
         st.download_button(
@@ -718,4 +651,3 @@ if st.session_state.pdf_buffer:
             file_name=f"{emp_id}_preferences.pdf",
             mime="application/pdf",
         )
-
