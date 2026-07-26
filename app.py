@@ -1,4 +1,4 @@
-import streamlit as st
+'''import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
@@ -336,7 +336,305 @@ if submit_clicked:
             st.success("🎉 Submitted Successfully")
 
     except Exception as e:
-        st.error(str(e))
+        st.error(str(e))'''
+import io
+import pandas as pd
+import streamlit as st
+import gspread
+from google.oauth2.service_account import Credentials
+
+# PDF IMPORTS
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table
+
+# -----------------------------
+# PAGE CONFIG
+# -----------------------------
+st.set_page_config(page_title="Faculty Preference System", layout="wide")
+
+# -----------------------------
+# UI STYLING
+# -----------------------------
+st.markdown(
+    """
+<style>
+.stApp {
+    background: linear-gradient(135deg, #ff6ec4, #7873f5, #4facfe, #43e97b, #f9d423);
+    background-size: 300% 300%;
+    animation: gradientMove 12s ease infinite;
+}
+@keyframes gradientMove {
+    0% {background-position: 0% 50%;}
+    50% {background-position: 100% 50%;}
+    100% {background-position: 0% 50%;}
+}
+.block-container {
+    background: rgba(255,255,255,0.92);
+    padding: 25px;
+    border-radius: 18px;
+}
+.title {
+    text-align: center;
+    font-size: 38px;
+    font-weight: 800;
+    margin-bottom: 20px;
+}
+.basket1 {
+    background: linear-gradient(90deg, #2563eb, #3b82f6);
+    padding: 10px 15px;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+}
+.basket2 {
+    background: linear-gradient(90deg, #ec4899, #f43f5e);
+    padding: 10px 15px;
+    border-radius: 10px;
+    color: white;
+    font-weight: bold;
+}
+.stButton>button {
+    background: linear-gradient(90deg, #7c3aed, #ec4899);
+    color: white;
+    font-weight: bold;
+    border-radius: 10px;
+    height: 50px;
+    width: 100%;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    "<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>",
+    unsafe_allow_html=True,
+)
+
+# -----------------------------
+# GOOGLE SHEETS SETUP
+# -----------------------------
+SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
+
+@st.cache_resource
+def get_spreadsheet():
+    scope = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"], scopes=scope
+    )
+    client = gspread.authorize(creds)
+    return client.open_by_key(SPREADSHEET_ID)
+
+ss = get_spreadsheet()
+
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+@st.cache_data(ttl=60)
+def load_basket_courses(sheet_name):
+    sheet = ss.worksheet(sheet_name)
+    data = sheet.get_all_values()
+    if not data or len(data) < 2:
+        return []
+    
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return [str(c).strip() for c in df["Course"].dropna().tolist() if str(c).strip()]
+
+@st.cache_data(ttl=60)
+def load_employees():
+    sheet = ss.worksheet("Faculty List")
+    data = sheet.get_all_values()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    df["EmpID"] = df["EmpID"].astype(str).str.strip()
+    return df
+
+@st.cache_data(ttl=15)
+def load_submitted_ids():
+    sheet = ss.worksheet("Responses")
+    return set(sheet.col_values(1))
+
+b1_courses = load_basket_courses("Basket1")
+b2_courses = load_basket_courses("Basket2")
+employees = load_employees()
+
+# -----------------------------
+# PDF GENERATION
+# -----------------------------
+def generate_pdf(emp_id, name, designation, b1, b2):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    content = []
+
+    content.append(Paragraph("<b>FACULTY PREFERENCE REPORT</b>", styles["Title"]))
+    content.append(Spacer(1, 15))
+
+    info = [["Employee ID", emp_id], ["Name", name], ["Designation", designation]]
+    content.append(Table(info))
+    content.append(Spacer(1, 15))
+
+    b1_table = [["S.No", "Basket 1 Course"]] + [[i, c] for i, c in enumerate(b1, 1)]
+    content.append(Paragraph("<b>Basket 1 Preferences</b>", styles["Heading2"]))
+    content.append(Table(b1_table))
+    content.append(Spacer(1, 15))
+
+    b2_table = [["S.No", "Basket 2 Course"]] + [[i, c] for i, c in enumerate(b2, 1)]
+    content.append(Paragraph("<b>Basket 2 Preferences</b>", styles["Heading2"]))
+    content.append(Table(b2_table))
+
+    doc.build(content)
+    buffer.seek(0)
+    return buffer
+
+# -----------------------------
+# BATCH UPDATE USAGE
+# -----------------------------
+def update_basket_usage(sheet_name, selected_courses):
+    sheet = ss.worksheet(sheet_name)
+    data = sheet.get_all_values()
+    headers = data[0]
+    
+    course_idx = headers.index("Course")
+    usage_idx = headers.index("Usage")
+    
+    updates = []
+    for row_idx, row in enumerate(data[1:], start=2):
+        course = row[course_idx].strip()
+        if course in selected_courses:
+            curr_usage = int(row[usage_idx]) if row[usage_idx] else 0
+            updates.append({
+                'range': f"{gspread.utils.rowcol_to_a1(row_idx, usage_idx + 1)}",
+                'values': [[curr_usage + 1]]
+            })
+            
+    if updates:
+        sheet.batch_update(updates)
+
+# -----------------------------
+# UI FORM INPUT
+# -----------------------------
+col_emp, col_details = st.columns([1, 2])
+
+with col_emp:
+    emp_id = st.text_input("Enter Employee ID").strip()
+
+name, designation = None, None
+
+with col_details:
+    if emp_id:
+        row = employees[employees["EmpID"] == emp_id]
+        if not row.empty:
+            name = row.iloc[0]["Name"]
+            designation = row.iloc[0]["Designation"]
+            st.success("Employee Identified")
+            st.markdown(f"**👤 Name:** {name} &nbsp;&nbsp;|&nbsp;&nbsp; **💼 Designation:** {designation}")
+        else:
+            st.error("Invalid Employee ID")
+
+if emp_id and emp_id in load_submitted_ids():
+    st.error("⚠️ Preferences for this Employee ID have already been submitted.")
+    st.stop()
+
+# -----------------------------
+# SESSION STATE & CALLBACKS
+# -----------------------------
+if "b1" not in st.session_state:
+    st.session_state.b1 = []
+if "b2" not in st.session_state:
+    st.session_state.b2 = []
+if "submitted_pdf" not in st.session_state:
+    st.session_state.submitted_pdf = None
+
+def clamp_selection(key):
+    if len(st.session_state[key]) > 7:
+        st.session_state[key] = st.session_state[key][:7]
+
+col1, col2 = st.columns(2)
+
+# Basket 1 UI
+with col1:
+    st.markdown("<div class='basket1'>📘 Basket 1</div>", unsafe_allow_html=True)
+    st.multiselect(
+        "Select exactly 7 courses",
+        options=b1_courses,
+        key="b1",
+        on_change=clamp_selection,
+        args=("b1",),
+    )
+    st.write(f"Selected: **{len(st.session_state.b1)} / 7**")
+
+# Basket 2 UI
+with col2:
+    st.markdown("<div class='basket2'>📗 Basket 2</div>", unsafe_allow_html=True)
+    st.multiselect(
+        "Select exactly 7 courses",
+        options=b2_courses,
+        key="b2",
+        on_change=clamp_selection,
+        args=("b2",),
+    )
+    st.write(f"Selected: **{len(st.session_state.b2)} / 7**")
+
+# -----------------------------
+# SUBMIT & DOWNLOAD
+# -----------------------------
+st.markdown("---")
+col_submit, col_download = st.columns([1, 1])
+
+with col_submit:
+    submit_clicked = st.button("🚀 Submit Preferences")
+
+if submit_clicked:
+    if not name:
+        st.error("Please enter a valid Employee ID before submitting.")
+        st.stop()
+
+    if len(st.session_state.b1) != 7 or len(st.session_state.b2) != 7:
+        st.error("⚠️ You must select exactly 7 courses in both Basket 1 and Basket 2.")
+        st.stop()
+
+    try:
+        with st.spinner("Submitting your preferences..."):
+            # Update sheet counts
+            update_basket_usage("Basket1", st.session_state.b1)
+            update_basket_usage("Basket2", st.session_state.b2)
+
+            # Record submission
+            response_sheet = ss.worksheet("Responses")
+            response_sheet.append_row([
+                emp_id, name, designation,
+                *st.session_state.b1,
+                *st.session_state.b2
+            ])
+
+            # Generate PDF and write to session state
+            st.session_state.submitted_pdf = generate_pdf(
+                emp_id, name, designation,
+                st.session_state.b1,
+                st.session_state.b2
+            )
+            
+            # Clear caches to reflect new data
+            st.cache_data.clear()
+
+        st.success("🎉 Preferences submitted successfully!")
+
+    except Exception as e:
+        st.error(f"Error recording preferences: {e}")
+
+# Render download button independently using session state PDF
+if st.session_state.submitted_pdf:
+    with col_download:
+        st.download_button(
+            label="📄 Download Preference PDF",
+            data=st.session_state.submitted_pdf,
+            file_name=f"{emp_id}_preferences.pdf",
+            mime="application/pdf"
+        )
 
        
 
