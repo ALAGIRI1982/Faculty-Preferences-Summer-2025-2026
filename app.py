@@ -337,6 +337,7 @@ if submit_clicked:
 
     except Exception as e:
         st.error(str(e))'''
+#-------------------------------------------------------------------------------------------------------------
 import io
 import pandas as pd
 import streamlit as st
@@ -442,20 +443,33 @@ def load_basket_courses(sheet_name):
         return []
     
     df = pd.DataFrame(data[1:], columns=data[0])
-    return [str(c).strip() for c in df["Course"].dropna().tolist() if str(c).strip()]
+    # Normalize column lookup for Course
+    course_col = next((c for c in df.columns if c.strip().title() == "Course"), None)
+    if not course_col:
+        return []
+        
+    return [str(c).strip() for c in df[course_col].dropna().tolist() if str(c).strip()]
 
 @st.cache_data(ttl=60)
 def load_employees():
     sheet = ss.worksheet("Faculty List")
     data = sheet.get_all_values()
+    if not data or len(data) < 2:
+        return pd.DataFrame(columns=["EmpID", "Name", "Designation"])
     df = pd.DataFrame(data[1:], columns=data[0])
-    df["EmpID"] = df["EmpID"].astype(str).str.strip()
+    
+    # Strip headers to prevent key issues
+    df.columns = [c.strip() for c in df.columns]
+    
+    if "EmpID" in df.columns:
+        df["EmpID"] = df["EmpID"].astype(str).str.strip()
     return df
 
 @st.cache_data(ttl=15)
 def load_submitted_ids():
     sheet = ss.worksheet("Responses")
-    return set(sheet.col_values(1))
+    col_vals = sheet.col_values(1)
+    return set(str(v).strip() for v in col_vals)
 
 b1_courses = load_basket_courses("Basket1")
 b2_courses = load_basket_courses("Basket2")
@@ -491,26 +505,41 @@ def generate_pdf(emp_id, name, designation, b1, b2):
     return buffer
 
 # -----------------------------
-# BATCH UPDATE USAGE
+# SAFE BATCH UPDATE USAGE (FIXED)
 # -----------------------------
 def update_basket_usage(sheet_name, selected_courses):
     sheet = ss.worksheet(sheet_name)
     data = sheet.get_all_values()
-    headers = data[0]
-    
+    if not data or len(data) < 2:
+        return
+
+    # Clean headers to safely perform index matching
+    headers = [str(h).strip().title() for h in data[0]]
+
+    # Safely locate "Course" and "Usage" columns without triggering list.index() errors
+    if "Course" not in headers or "Usage" not in headers:
+        raise ValueError(
+            f"Sheet '{sheet_name}' must contain 'Course' and 'Usage' column headers."
+        )
+
     course_idx = headers.index("Course")
     usage_idx = headers.index("Usage")
-    
+
+    selected_set = set(str(c).strip() for c in selected_courses)
     updates = []
+
     for row_idx, row in enumerate(data[1:], start=2):
-        course = row[course_idx].strip()
-        if course in selected_courses:
-            curr_usage = int(row[usage_idx]) if row[usage_idx] else 0
-            updates.append({
-                'range': f"{gspread.utils.rowcol_to_a1(row_idx, usage_idx + 1)}",
-                'values': [[curr_usage + 1]]
-            })
-            
+        if len(row) > course_idx:
+            course = str(row[course_idx]).strip()
+            if course in selected_set:
+                curr_val = row[usage_idx].strip() if len(row) > usage_idx else "0"
+                curr_usage = int(curr_val) if curr_val.isdigit() else 0
+                
+                updates.append({
+                    'range': f"{gspread.utils.rowcol_to_a1(row_idx, usage_idx + 1)}",
+                    'values': [[curr_usage + 1]]
+                })
+
     if updates:
         sheet.batch_update(updates)
 
@@ -525,11 +554,11 @@ with col_emp:
 name, designation = None, None
 
 with col_details:
-    if emp_id:
+    if emp_id and "EmpID" in employees.columns:
         row = employees[employees["EmpID"] == emp_id]
         if not row.empty:
-            name = row.iloc[0]["Name"]
-            designation = row.iloc[0]["Designation"]
+            name = row.iloc[0].get("Name", "")
+            designation = row.iloc[0].get("Designation", "")
             st.success("Employee Identified")
             st.markdown(f"**👤 Name:** {name} &nbsp;&nbsp;|&nbsp;&nbsp; **💼 Designation:** {designation}")
         else:
@@ -599,7 +628,7 @@ if submit_clicked:
 
     try:
         with st.spinner("Submitting your preferences..."):
-            # Update sheet counts
+            # Update sheet counts safely
             update_basket_usage("Basket1", st.session_state.b1)
             update_basket_usage("Basket2", st.session_state.b2)
 
@@ -635,6 +664,3 @@ if st.session_state.submitted_pdf:
             file_name=f"{emp_id}_preferences.pdf",
             mime="application/pdf"
         )
-
-       
-
