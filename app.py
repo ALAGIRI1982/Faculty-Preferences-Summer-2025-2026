@@ -443,8 +443,7 @@ def load_basket_courses(sheet_name):
         return []
     
     df = pd.DataFrame(data[1:], columns=data[0])
-    # Normalize column lookup for Course
-    course_col = next((c for c in df.columns if c.strip().title() == "Course"), None)
+    course_col = next((c for c in df.columns if "course" in str(c).strip().lower()), None)
     if not course_col:
         return []
         
@@ -457,8 +456,6 @@ def load_employees():
     if not data or len(data) < 2:
         return pd.DataFrame(columns=["EmpID", "Name", "Designation"])
     df = pd.DataFrame(data[1:], columns=data[0])
-    
-    # Strip headers to prevent key issues
     df.columns = [c.strip() for c in df.columns]
     
     if "EmpID" in df.columns:
@@ -503,45 +500,6 @@ def generate_pdf(emp_id, name, designation, b1, b2):
     doc.build(content)
     buffer.seek(0)
     return buffer
-
-# -----------------------------
-# SAFE BATCH UPDATE USAGE (FIXED)
-# -----------------------------
-def update_basket_usage(sheet_name, selected_courses):
-    sheet = ss.worksheet(sheet_name)
-    data = sheet.get_all_values()
-    if not data or len(data) < 2:
-        return
-
-    # Clean headers to safely perform index matching
-    headers = [str(h).strip().title() for h in data[0]]
-
-    # Safely locate "Course" and "Usage" columns without triggering list.index() errors
-    if "Course" not in headers or "Usage" not in headers:
-        raise ValueError(
-            f"Sheet '{sheet_name}' must contain 'Course' and 'Usage' column headers."
-        )
-
-    course_idx = headers.index("Course")
-    usage_idx = headers.index("Usage")
-
-    selected_set = set(str(c).strip() for c in selected_courses)
-    updates = []
-
-    for row_idx, row in enumerate(data[1:], start=2):
-        if len(row) > course_idx:
-            course = str(row[course_idx]).strip()
-            if course in selected_set:
-                curr_val = row[usage_idx].strip() if len(row) > usage_idx else "0"
-                curr_usage = int(curr_val) if curr_val.isdigit() else 0
-                
-                updates.append({
-                    'range': f"{gspread.utils.rowcol_to_a1(row_idx, usage_idx + 1)}",
-                    'values': [[curr_usage + 1]]
-                })
-
-    if updates:
-        sheet.batch_update(updates)
 
 # -----------------------------
 # UI FORM INPUT
@@ -628,11 +586,7 @@ if submit_clicked:
 
     try:
         with st.spinner("Submitting your preferences..."):
-            # Update sheet counts safely
-            update_basket_usage("Basket1", st.session_state.b1)
-            update_basket_usage("Basket2", st.session_state.b2)
-
-            # Record submission
+            # Record submission directly into Responses
             response_sheet = ss.worksheet("Responses")
             response_sheet.append_row([
                 emp_id, name, designation,
@@ -647,7 +601,7 @@ if submit_clicked:
                 st.session_state.b2
             )
             
-            # Clear caches to reflect new data
+            # Clear cache so the ID registers as submitted immediately
             st.cache_data.clear()
 
         st.success("🎉 Preferences submitted successfully!")
