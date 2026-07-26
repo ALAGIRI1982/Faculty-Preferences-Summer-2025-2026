@@ -433,40 +433,58 @@ def get_spreadsheet():
 ss = get_spreadsheet()
 
 # -----------------------------
-# LOAD DATA
+# LOAD DATA (SAFE FROM LIST.INDEX ERRORS)
 # -----------------------------
 @st.cache_data(ttl=60)
 def load_basket_courses(sheet_name):
-    sheet = ss.worksheet(sheet_name)
-    data = sheet.get_all_values()
-    if not data or len(data) < 2:
-        return []
-    
-    df = pd.DataFrame(data[1:], columns=data[0])
-    course_col = next((c for c in df.columns if "course" in str(c).strip().lower()), None)
-    if not course_col:
-        return []
+    try:
+        sheet = ss.worksheet(sheet_name)
+        data = sheet.get_all_values()
+        if not data or len(data) < 2:
+            return []
         
-    return [str(c).strip() for c in df[course_col].dropna().tolist() if str(c).strip()]
+        # Pull the first column safely regardless of header name
+        return [str(row[0]).strip() for row in data[1:] if row and str(row[0]).strip()]
+    except Exception:
+        return []
 
 @st.cache_data(ttl=60)
 def load_employees():
-    sheet = ss.worksheet("Faculty List")
-    data = sheet.get_all_values()
-    if not data or len(data) < 2:
+    try:
+        sheet = ss.worksheet("Faculty List")
+        data = sheet.get_all_values()
+        if not data or len(data) < 2:
+            return pd.DataFrame(columns=["EmpID", "Name", "Designation"])
+        
+        # Clean headers and values manually without relying on Pandas list index lookups
+        headers = [str(h).strip().lower() for h in data[0]]
+        
+        emp_idx = next((i for i, h in enumerate(headers) if "emp" in h or "id" in h), 0)
+        name_idx = next((i for i, h in enumerate(headers) if "name" in h), 1)
+        desig_idx = next((i for i, h in enumerate(headers) if "desig" in h), 2)
+
+        rows = []
+        for r in data[1:]:
+            if len(r) > emp_idx and str(r[emp_idx]).strip():
+                rows.append({
+                    "EmpID": str(r[emp_idx]).strip(),
+                    "Name": str(r[name_idx]).strip() if len(r) > name_idx else "",
+                    "Designation": str(r[desig_idx]).strip() if len(r) > desig_idx else ""
+                })
+        return pd.DataFrame(rows)
+    except Exception:
         return pd.DataFrame(columns=["EmpID", "Name", "Designation"])
-    df = pd.DataFrame(data[1:], columns=data[0])
-    df.columns = [c.strip() for c in df.columns]
-    
-    if "EmpID" in df.columns:
-        df["EmpID"] = df["EmpID"].astype(str).str.strip()
-    return df
 
 @st.cache_data(ttl=15)
 def load_submitted_ids():
-    sheet = ss.worksheet("Responses")
-    col_vals = sheet.col_values(1)
-    return set(str(v).strip() for v in col_vals)
+    try:
+        sheet = ss.worksheet("Responses")
+        col_vals = sheet.col_values(1)
+        if not col_vals:
+            return set()
+        return set(str(v).strip() for v in col_vals[1:]) # Exclude header
+    except Exception:
+        return set()
 
 b1_courses = load_basket_courses("Basket1")
 b2_courses = load_basket_courses("Basket2")
@@ -512,7 +530,7 @@ with col_emp:
 name, designation = None, None
 
 with col_details:
-    if emp_id and "EmpID" in employees.columns:
+    if emp_id and "EmpID" in employees.columns and not employees.empty:
         row = employees[employees["EmpID"] == emp_id]
         if not row.empty:
             name = row.iloc[0].get("Name", "")
@@ -586,13 +604,19 @@ if submit_clicked:
 
     try:
         with st.spinner("Submitting your preferences..."):
-            # Record submission directly into Responses
             response_sheet = ss.worksheet("Responses")
-            response_sheet.append_row([
-                emp_id, name, designation,
-                *st.session_state.b1,
-                *st.session_state.b2
-            ])
+            
+            # Construct row data
+            new_row = [
+                str(emp_id),
+                str(name),
+                str(designation),
+                *[str(c) for c in st.session_state.b1],
+                *[str(c) for c in st.session_state.b2]
+            ]
+            
+            # Safe append without gspread table indexing
+            response_sheet.append_row(new_row, value_input_option="USER_ENTERED")
 
             # Generate PDF and write to session state
             st.session_state.submitted_pdf = generate_pdf(
@@ -601,13 +625,15 @@ if submit_clicked:
                 st.session_state.b2
             )
             
-            # Clear cache so the ID registers as submitted immediately
+            # Clear cache so the submission is immediately recognized
             st.cache_data.clear()
 
         st.success("🎉 Preferences submitted successfully!")
 
     except Exception as e:
+        import traceback
         st.error(f"Error recording preferences: {e}")
+        st.code(traceback.format_exc())
 
 # Render download button independently using session state PDF
 if st.session_state.submitted_pdf:
