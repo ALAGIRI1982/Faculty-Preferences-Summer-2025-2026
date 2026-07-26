@@ -71,7 +71,7 @@ st.markdown(
 # TITLE
 # -----------------------------
 st.markdown(
-    "<div class='title'>🎓 Faculty Course Preference System Fall 2026-2027</div>",
+    "<div class='title'>🎓 Faculty Course Preference System Fall Weekend Intra(Sem) 2026-2027</div>",
     unsafe_allow_html=True,
 )
 
