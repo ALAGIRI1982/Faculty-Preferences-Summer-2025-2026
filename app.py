@@ -693,7 +693,15 @@ if emp_id and not is_just_submitted:
             )
         st.stop()
 
+# -----------------------------
+# NON-ACCEPT PREFERENCE MODE GUARD (FOR UNSUBMITTED FACULTY)
+# -----------------------------
 if not portal_is_open:
+    if emp_id and name is not None:
+        st.error(
+           "🙏 **Submission Window Closed:** We could not find a recorded preference for your Employee ID, and online submissions are now closed. "
+    "Please contact the **TT Coordinator**, who will be happy to assist you."
+        )
     st.stop()
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -906,7 +914,7 @@ with st.container(border=True):
                 data=st.session_state.pdf_buffer,
                 file_name=f"{emp_id}_preferences.pdf",
                 mime="application/pdf",
-            )-------------------------'''
+            )----------------------------'''
 import io
 import threading
 import time
@@ -1216,8 +1224,41 @@ def generate_pdf(emp_id, name, designation, b1, b2, timestamp):
     return buffer
 
 # -----------------------------
-# HELPER: BUILD LONG-FORMAT EXCEL & COURSE DEMAND ANALYTICS
+# HELPER: STYLED EXCEL BUILDERS (RESPONSES & COURSE DEMAND)
 # -----------------------------
+def style_and_export_excel(df, sheet_name):
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        ws = writer.sheets[sheet_name]
+
+        header_fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+        row_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+        thin_border = Border(
+            left=Side(style="thin", color="BFBFBF"),
+            right=Side(style="thin", color="BFBFBF"),
+            top=Side(style="thin", color="BFBFBF"),
+            bottom=Side(style="thin", color="BFBFBF"),
+        )
+
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.border = thin_border
+
+        for r_idx in range(2, len(df) + 2):
+            for c_idx in range(1, len(df.columns) + 1):
+                c = ws.cell(row=r_idx, column=c_idx)
+                c.fill = row_fill
+                c.border = thin_border
+
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    excel_buffer.seek(0)
+    return excel_buffer
+
 def build_admin_excel(resp_records):
     long_rows = []
     for row in resp_records[1:]:
@@ -1247,37 +1288,7 @@ def build_admin_excel(resp_records):
                 })
 
     export_df = pd.DataFrame(long_rows, columns=["EmpID", "Name", "Designation", "Attribute", "Value"])
-
-    excel_buffer = io.BytesIO()
-    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
-        export_df.to_excel(writer, index=False, sheet_name="Preferences")
-        ws = writer.sheets["Preferences"]
-
-        header_fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
-        row_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-        thin_border = Border(
-            left=Side(style="thin", color="BFBFBF"),
-            right=Side(style="thin", color="BFBFBF"),
-            top=Side(style="thin", color="BFBFBF"),
-            bottom=Side(style="thin", color="BFBFBF"),
-        )
-
-        for cell in ws[1]:
-            cell.fill = header_fill
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.border = thin_border
-
-        for r_idx in range(2, len(export_df) + 2):
-            for c_idx in range(1, 6):
-                c = ws.cell(row=r_idx, column=c_idx)
-                c.fill = row_fill
-                c.border = thin_border
-
-        for col in ws.columns:
-            max_len = max(len(str(cell.value or "")) for cell in col)
-            ws.column_dimensions[col[0].column_letter].width = max_len + 4
-
-    excel_buffer.seek(0)
+    excel_buffer = style_and_export_excel(export_df, "Preferences")
     return export_df, excel_buffer
 
 # -----------------------------
@@ -1367,7 +1378,7 @@ with st.sidebar:
                 if len(resp_records) > 1:
                     export_df, excel_buffer = build_admin_excel(resp_records)
                     st.download_button(
-                        "📊 Download Excel (.xlsx)",
+                        "📊 Download All Responses (.xlsx)",
                         data=excel_buffer,
                         file_name="winter_2026_2027_responses.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1392,6 +1403,15 @@ with st.sidebar:
                             .rename(columns={"Value": "Course"})
                         )
                         st.dataframe(demand_df, hide_index=True, use_container_width=True)
+
+                        demand_excel_buffer = style_and_export_excel(demand_df, "Course_Demand")
+                        st.download_button(
+                            "📥 Download Course Demand (.xlsx)",
+                            data=demand_excel_buffer,
+                            file_name="winter_2026_2027_course_demand.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                        )
             else:
                 st.error("Incorrect Password")
 
@@ -1608,8 +1628,8 @@ if emp_id and not is_just_submitted:
 if not portal_is_open:
     if emp_id and name is not None:
         st.error(
-           "🙏 **Submission Window Closed:** We could not find a recorded preference for your Employee ID, and online submissions are now closed. "
-    "Please contact the **TT Coordinator**, who will be happy to assist you."
+            "🙏 **Submission Window Closed:** We could not find a recorded preference for your Employee ID, and online submissions are now closed. "
+            "Please contact the **TT Coordinator**, who will be happy to assist you."
         )
     st.stop()
 
