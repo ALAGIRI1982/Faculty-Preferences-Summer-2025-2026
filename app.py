@@ -205,9 +205,9 @@ b2_courses = load_courses("Basket2")
 employees = load_employees()
 
 # -----------------------------
-# HELPER: BUILD LONG-FORMAT EXCEL & CSV FOR ADMIN
+# HELPER: BUILD LONG-FORMAT EXCEL FOR ADMIN
 # -----------------------------
-def build_admin_exports(resp_records):
+def build_admin_excel(resp_records):
     long_rows = []
     for row in resp_records[1:]:
         if len(row) < 17:
@@ -216,22 +216,22 @@ def build_admin_exports(resp_records):
         b1_list = row[3:10]
         b2_list = row[10:17]
 
-        for course in b1_list:
+        for pref_num, course in enumerate(b1_list, 1):
             if str(course).strip():
                 long_rows.append({
                     "EmpID": e_id,
                     "Name": e_name,
                     "Designation": e_desig,
-                    "Attribute": "BASKET1",
+                    "Attribute": f"B1P{pref_num}",
                     "Value": str(course).strip(),
                 })
-        for course in b2_list:
+        for pref_num, course in enumerate(b2_list, 1):
             if str(course).strip():
                 long_rows.append({
                     "EmpID": e_id,
                     "Name": e_name,
                     "Designation": e_desig,
-                    "Attribute": "BASKET2",
+                    "Attribute": f"B2P{pref_num}",
                     "Value": str(course).strip(),
                 })
 
@@ -269,7 +269,7 @@ def build_admin_exports(resp_records):
             ws.column_dimensions[col[0].column_letter].width = max_len + 4
 
     excel_buffer.seek(0)
-    return export_df, excel_buffer
+    return excel_buffer
 
 # -----------------------------
 # SIDEBAR: PASSWORD-PROTECTED ADMIN DASHBOARD
@@ -307,23 +307,16 @@ with st.sidebar:
                 else:
                     st.info("All faculty have submitted!")
 
-                # Export Full Responses in Unpivoted / Long Format
+                # Export Full Responses in Unpivoted / Long Excel Format
                 try:
                     resp_records = ss.worksheet("Responses").get_all_values()
                     if len(resp_records) > 1:
-                        export_df, excel_buffer = build_admin_exports(resp_records)
+                        excel_buffer = build_admin_excel(resp_records)
                         st.download_button(
                             "📊 Download Excel (.xlsx)",
                             data=excel_buffer,
                             file_name="winter_2026_2027_responses.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True,
-                        )
-                        st.download_button(
-                            "📥 Download CSV",
-                            data=export_df.to_csv(index=False).encode("utf-8"),
-                            file_name="winter_2026_2027_responses.csv",
-                            mime="text/csv",
                             use_container_width=True,
                         )
                 except Exception as err:
@@ -676,7 +669,7 @@ with st.container(border=True):
                 data=st.session_state.pdf_buffer,
                 file_name=f"{emp_id}_preferences.pdf",
                 mime="application/pdf",
-            )-------------------------'''
+            )-------------------------------------------------------'''
 import io
 import time
 from datetime import datetime
@@ -964,15 +957,38 @@ with st.sidebar:
                 st.success("Access Granted")
                 if st.button("🔄 Refresh Live Data", use_container_width=True):
                     get_submitted_ids.clear()
+                    load_employees.clear()
                     st.rerun()
 
                 submitted_list = get_submitted_ids()
-                valid_submitted = [eid for eid in submitted_list if eid in set(employees["EmpID"])]
-                total_faculty = len(employees)
+                raw_resp_ids = [
+                    x for x in submitted_list
+                    if x and x not in ("EMPID", "EMP ID", "EMPLOYEE ID")
+                ]
+                faculty_ids = list(employees["EmpID"])
+                faculty_set = set(faculty_ids)
 
-                st.metric("Submissions", f"{len(valid_submitted)} / {total_faculty}")
+                valid_submitted = set(raw_resp_ids) & faculty_set
+                total_faculty = len(faculty_set)
+
+                st.metric("Total Responses", f"{len(raw_resp_ids)} / {total_faculty}")
                 if total_faculty > 0:
                     st.progress(min(len(valid_submitted) / total_faculty, 1.0))
+
+                st.caption(
+                    f"📄 Responses: {len(raw_resp_ids)} rows ({len(set(raw_resp_ids))} unique) | "
+                    f"📋 Faculty List: {len(faculty_ids)} rows ({total_faculty} unique)"
+                )
+
+                # Flag any orphan IDs in Responses not found in Faculty List
+                not_in_faculty = set(raw_resp_ids) - faculty_set
+                if not_in_faculty:
+                    st.error(f"🚨 In Responses but NOT in Faculty List: {', '.join(sorted(not_in_faculty))}")
+
+                # Flag any duplicate rows in Responses
+                if len(raw_resp_ids) != len(set(raw_resp_ids)):
+                    dupes = {x for x in raw_resp_ids if raw_resp_ids.count(x) > 1}
+                    st.warning(f"⚠️ Duplicate IDs in Responses: {', '.join(sorted(dupes))}")
 
                 # Pending Faculty List
                 pending_df = employees[~employees["EmpID"].isin(valid_submitted)]
@@ -1072,14 +1088,18 @@ def submit_with_retry(emp_id, name, designation, b1, b2):
                 return False, "duplicate", None
 
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            response_sheet.append_row([
-                emp_id,
-                name,
-                designation,
-                *b1,
-                *b2,
-                timestamp,
-            ])
+            # Prepend apostrophe to emp_id so Google Sheets preserves leading zeros as text
+            response_sheet.append_row(
+                [
+                    f"'{emp_id}",
+                    name,
+                    designation,
+                    *b1,
+                    *b2,
+                    timestamp,
+                ],
+                value_input_option="USER_ENTERED",
+            )
             return True, "ok", timestamp
         except Exception as e:
             if attempt < max_retries - 1:
@@ -1121,7 +1141,7 @@ def confirm_submission_dialog(emp_id, name, designation):
                 )
                 st.session_state.submitted_emp = emp_id
                 get_submitted_ids.clear()
-                st.rerun()
+                st.rerun(scope="app")
             elif msg == "duplicate":
                 st.error("🚫 Preferences were already submitted for this Employee ID.")
             else:
