@@ -76,7 +76,7 @@ st.markdown(
 .course-pill {
     background-color: #f1f5f9;
     border-left: 4px solid #3b82f6;
-    padding: 7px 12px;
+    padding: 8px 12px;
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
@@ -85,7 +85,7 @@ st.markdown(
 .course-pill-b2 {
     background-color: #fdf2f8;
     border-left: 4px solid #ec4899;
-    padding: 7px 12px;
+    padding: 8px 12px;
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
@@ -97,6 +97,7 @@ span[data-baseweb="tag"] {
     border-radius: 8px !important;
     font-size: 13px !important;
 }
+/* Primary Submit / Confirm Button */
 div[data-testid="stButton"] > button[kind="primary"] {
     background: linear-gradient(90deg, #7c3aed, #ec4899);
     color: white;
@@ -107,6 +108,22 @@ div[data-testid="stButton"] > button[kind="primary"] {
     border: none;
     font-size: 16px;
 }
+/* Crisp, Unclipped Up/Down Rank Buttons */
+div[data-testid="stButton"] > button[kind="secondary"] {
+    padding: 4px 0px !important;
+    min-height: 38px !important;
+    width: 100% !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+    border-radius: 8px !important;
+    border: 1px solid #cbd5e1 !important;
+    background-color: #ffffff !important;
+}
+div[data-testid="stButton"] > button[kind="secondary"]:hover:not(:disabled) {
+    border-color: #3b82f6 !important;
+    background-color: #eff6ff !important;
+}
+/* Download Button */
 .stDownloadButton>button {
     background: linear-gradient(90deg, #059669, #10b981);
     color: white;
@@ -198,12 +215,11 @@ with st.sidebar:
         if admin_pwd:
             if admin_pwd == expected_pwd:
                 st.success("Access Granted")
-                if st.button("🔄 Refresh Live Data"):
+                if st.button("🔄 Refresh Live Data", use_container_width=True):
                     get_submitted_ids.clear()
                     st.rerun()
 
                 submitted_list = get_submitted_ids()
-                # Exclude header row if present
                 valid_submitted = [eid for eid in submitted_list if eid in set(employees["EmpID"])]
                 total_faculty = len(employees)
 
@@ -215,7 +231,11 @@ with st.sidebar:
                 pending_df = employees[~employees["EmpID"].isin(valid_submitted)]
                 st.markdown(f"**⏳ Pending Faculty ({len(pending_df)})**")
                 if not pending_df.empty:
-                    st.dataframe(pending_df[["EmpID", pending_df.columns[1]]], hide_index=True, use_container_width=True)
+                    st.dataframe(
+                        pending_df[["EmpID", pending_df.columns[1]]],
+                        hide_index=True,
+                        use_container_width=True,
+                    )
                 else:
                     st.info("All faculty have submitted!")
 
@@ -493,19 +513,33 @@ with left_col:
 
 with right_col:
     with st.container(border=True):
-        st.markdown("<div class='summary-header'>📋 Live Preference Summary (Use ↑/↓ to Rank)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='summary-header'>📋 Live Preference Summary (Use ⬆️/⬇️ to Rank)</div>", unsafe_allow_html=True)
 
         # Basket 1 Reorderable List
         st.markdown(f"**📘 Basket 1 ({len(st.session_state.b1)} / 7)**")
         if st.session_state.b1:
             for idx, course in enumerate(st.session_state.b1):
-                c_text, c_up, c_down = st.columns([6, 1, 1], gap="small")
+                c_text, c_up, c_down = st.columns([5.2, 1.4, 1.4], gap="small")
                 with c_text:
                     st.markdown(f"<div class='course-pill'><b>#{idx+1}</b> &nbsp; {course}</div>", unsafe_allow_html=True)
                 with c_up:
-                    st.button("↑", key=f"b1_up_{idx}", disabled=(idx == 0 or form_disabled), on_click=move_item, args=("b1", idx, -1))
+                    st.button(
+                        "⬆️",
+                        key=f"b1_up_{idx}",
+                        disabled=(idx == 0 or form_disabled),
+                        on_click=move_item,
+                        args=("b1", idx, -1),
+                        use_container_width=True,
+                    )
                 with c_down:
-                    st.button("↓", key=f"b1_dn_{idx}", disabled=(idx == len(st.session_state.b1) - 1 or form_disabled), on_click=move_item, args=("b1", idx, 1))
+                    st.button(
+                        "⬇️",
+                        key=f"b1_dn_{idx}",
+                        disabled=(idx == len(st.session_state.b1) - 1 or form_disabled),
+                        on_click=move_item,
+                        args=("b1", idx, 1),
+                        use_container_width=True,
+                    )
         else:
             st.caption("No courses selected from Basket 1 yet.")
 
@@ -515,13 +549,27 @@ with right_col:
         st.markdown(f"**📗 Basket 2 ({len(st.session_state.b2)} / 7)**")
         if st.session_state.b2:
             for idx, course in enumerate(st.session_state.b2):
-                c_text, c_up, c_down = st.columns([6, 1, 1], gap="small")
+                c_text, c_up, c_down = st.columns([5.2, 1.4, 1.4], gap="small")
                 with c_text:
                     st.markdown(f"<div class='course-pill-b2'><b>#{idx+1}</b> &nbsp; {course}</div>", unsafe_allow_html=True)
                 with c_up:
-                    st.button("↑", key=f"b2_up_{idx}", disabled=(idx == 0 or form_disabled), on_click=move_item, args=("b2", idx, -1))
+                    st.button(
+                        "⬆️",
+                        key=f"b2_up_{idx}",
+                        disabled=(idx == 0 or form_disabled),
+                        on_click=move_item,
+                        args=("b2", idx, -1),
+                        use_container_width=True,
+                    )
                 with c_down:
-                    st.button("↓", key=f"b2_dn_{idx}", disabled=(idx == len(st.session_state.b2) - 1 or form_disabled), on_click=move_item, args=("b2", idx, 1))
+                    st.button(
+                        "⬇️",
+                        key=f"b2_dn_{idx}",
+                        disabled=(idx == len(st.session_state.b2) - 1 or form_disabled),
+                        on_click=move_item,
+                        args=("b2", idx, 1),
+                        use_container_width=True,
+                    )
         else:
             st.caption("No courses selected from Basket 2 yet.")
 
@@ -552,7 +600,7 @@ with st.container(border=True):
                 data=st.session_state.pdf_buffer,
                 file_name=f"{emp_id}_preferences.pdf",
                 mime="application/pdf",
-            )------------------------------------------------------------'''
+            )------------------------------------------'''
 import io
 import time
 from datetime import datetime
@@ -560,6 +608,7 @@ import gspread
 import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
+from openpyxl.styles import Border, Font, PatternFill, Side
 
 # PDF IMPORTS
 from reportlab.lib import colors
@@ -759,6 +808,73 @@ b2_courses = load_courses("Basket2")
 employees = load_employees()
 
 # -----------------------------
+# HELPER: BUILD LONG-FORMAT EXCEL & CSV FOR ADMIN
+# -----------------------------
+def build_admin_exports(resp_records):
+    long_rows = []
+    for row in resp_records[1:]:
+        if len(row) < 17:
+            continue
+        e_id, e_name, e_desig = row[0].strip(), row[1].strip(), row[2].strip()
+        b1_list = row[3:10]
+        b2_list = row[10:17]
+
+        for course in b1_list:
+            if str(course).strip():
+                long_rows.append({
+                    "EmpID": e_id,
+                    "Name": e_name,
+                    "Designation": e_desig,
+                    "Attribute": "BASKET1",
+                    "Value": str(course).strip(),
+                })
+        for course in b2_list:
+            if str(course).strip():
+                long_rows.append({
+                    "EmpID": e_id,
+                    "Name": e_name,
+                    "Designation": e_desig,
+                    "Attribute": "BASKET2",
+                    "Value": str(course).strip(),
+                })
+
+    export_df = pd.DataFrame(long_rows, columns=["EmpID", "Name", "Designation", "Attribute", "Value"])
+
+    # Generate Styled Excel (.xlsx) matching green table layout
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        export_df.to_excel(writer, index=False, sheet_name="Preferences")
+        ws = writer.sheets["Preferences"]
+
+        header_fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+        row_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+        thin_border = Border(
+            left=Side(style="thin", color="BFBFBF"),
+            right=Side(style="thin", color="BFBFBF"),
+            top=Side(style="thin", color="BFBFBF"),
+            bottom=Side(style="thin", color="BFBFBF"),
+        )
+
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.border = thin_border
+
+        for r_idx in range(2, len(export_df) + 2):
+            for c_idx in range(1, 6):
+                c = ws.cell(row=r_idx, column=c_idx)
+                c.fill = row_fill
+                c.border = thin_border
+
+        # Auto-fit column widths
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    excel_buffer.seek(0)
+    return export_df, excel_buffer
+
+# -----------------------------
 # SIDEBAR: PASSWORD-PROTECTED ADMIN DASHBOARD
 # -----------------------------
 with st.sidebar:
@@ -794,19 +910,27 @@ with st.sidebar:
                 else:
                     st.info("All faculty have submitted!")
 
-                # Export Full Responses CSV
+                # Export Full Responses in Unpivoted / Long Format
                 try:
                     resp_records = ss.worksheet("Responses").get_all_values()
                     if len(resp_records) > 1:
-                        resp_df = pd.DataFrame(resp_records[1:], columns=resp_records[0])
+                        export_df, excel_buffer = build_admin_exports(resp_records)
                         st.download_button(
-                            "📥 Download All Responses (CSV)",
-                            data=resp_df.to_csv(index=False).encode("utf-8"),
+                            "📊 Download Excel (.xlsx)",
+                            data=excel_buffer,
+                            file_name="winter_2026_2027_responses.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                        )
+                        st.download_button(
+                            "📥 Download CSV",
+                            data=export_df.to_csv(index=False).encode("utf-8"),
                             file_name="winter_2026_2027_responses.csv",
                             mime="text/csv",
+                            use_container_width=True,
                         )
                 except Exception as err:
-                    st.caption(f"Responses preview unavailable: {err}")
+                    st.caption(f"Responses export unavailable: {err}")
             else:
                 st.error("Incorrect Password")
 
