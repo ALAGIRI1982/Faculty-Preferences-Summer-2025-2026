@@ -914,7 +914,7 @@ with st.container(border=True):
                 data=st.session_state.pdf_buffer,
                 file_name=f"{emp_id}_preferences.pdf",
                 mime="application/pdf",
-            )-------------------''''
+            )-------------------'''
 import io
 import threading
 import time
