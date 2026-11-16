@@ -5,6 +5,7 @@ import gspread
 import pandas as pd
 import streamlit as st
 from google.oauth2.service_account import Credentials
+from openpyxl.styles import Border, Font, PatternFill, Side
 
 # PDF IMPORTS
 from reportlab.lib import colors
@@ -204,6 +205,73 @@ b2_courses = load_courses("Basket2")
 employees = load_employees()
 
 # -----------------------------
+# HELPER: BUILD LONG-FORMAT EXCEL & CSV FOR ADMIN
+# -----------------------------
+def build_admin_exports(resp_records):
+    long_rows = []
+    for row in resp_records[1:]:
+        if len(row) < 17:
+            continue
+        e_id, e_name, e_desig = row[0].strip(), row[1].strip(), row[2].strip()
+        b1_list = row[3:10]
+        b2_list = row[10:17]
+
+        for course in b1_list:
+            if str(course).strip():
+                long_rows.append({
+                    "EmpID": e_id,
+                    "Name": e_name,
+                    "Designation": e_desig,
+                    "Attribute": "BASKET1",
+                    "Value": str(course).strip(),
+                })
+        for course in b2_list:
+            if str(course).strip():
+                long_rows.append({
+                    "EmpID": e_id,
+                    "Name": e_name,
+                    "Designation": e_desig,
+                    "Attribute": "BASKET2",
+                    "Value": str(course).strip(),
+                })
+
+    export_df = pd.DataFrame(long_rows, columns=["EmpID", "Name", "Designation", "Attribute", "Value"])
+
+    # Generate Styled Excel (.xlsx) matching green table layout
+    excel_buffer = io.BytesIO()
+    with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
+        export_df.to_excel(writer, index=False, sheet_name="Preferences")
+        ws = writer.sheets["Preferences"]
+
+        header_fill = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
+        row_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+        thin_border = Border(
+            left=Side(style="thin", color="BFBFBF"),
+            right=Side(style="thin", color="BFBFBF"),
+            top=Side(style="thin", color="BFBFBF"),
+            bottom=Side(style="thin", color="BFBFBF"),
+        )
+
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.border = thin_border
+
+        for r_idx in range(2, len(export_df) + 2):
+            for c_idx in range(1, 6):
+                c = ws.cell(row=r_idx, column=c_idx)
+                c.fill = row_fill
+                c.border = thin_border
+
+        # Auto-fit column widths
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    excel_buffer.seek(0)
+    return export_df, excel_buffer
+
+# -----------------------------
 # SIDEBAR: PASSWORD-PROTECTED ADMIN DASHBOARD
 # -----------------------------
 with st.sidebar:
@@ -239,19 +307,27 @@ with st.sidebar:
                 else:
                     st.info("All faculty have submitted!")
 
-                # Export Full Responses CSV
+                # Export Full Responses in Unpivoted / Long Format
                 try:
                     resp_records = ss.worksheet("Responses").get_all_values()
                     if len(resp_records) > 1:
-                        resp_df = pd.DataFrame(resp_records[1:], columns=resp_records[0])
+                        export_df, excel_buffer = build_admin_exports(resp_records)
                         st.download_button(
-                            "📥 Download All Responses (CSV)",
-                            data=resp_df.to_csv(index=False).encode("utf-8"),
+                            "📊 Download Excel (.xlsx)",
+                            data=excel_buffer,
+                            file_name="winter_2026_2027_responses.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                        )
+                        st.download_button(
+                            "📥 Download CSV",
+                            data=export_df.to_csv(index=False).encode("utf-8"),
                             file_name="winter_2026_2027_responses.csv",
                             mime="text/csv",
+                            use_container_width=True,
                         )
                 except Exception as err:
-                    st.caption(f"Responses preview unavailable: {err}")
+                    st.caption(f"Responses export unavailable: {err}")
             else:
                 st.error("Incorrect Password")
 
@@ -600,7 +676,7 @@ with st.container(border=True):
                 data=st.session_state.pdf_buffer,
                 file_name=f"{emp_id}_preferences.pdf",
                 mime="application/pdf",
-            )------------------------------------------'''
+            )-------------------------'''
 import io
 import time
 from datetime import datetime
@@ -808,9 +884,9 @@ b2_courses = load_courses("Basket2")
 employees = load_employees()
 
 # -----------------------------
-# HELPER: BUILD LONG-FORMAT EXCEL & CSV FOR ADMIN
+# HELPER: BUILD LONG-FORMAT EXCEL FOR ADMIN
 # -----------------------------
-def build_admin_exports(resp_records):
+def build_admin_excel(resp_records):
     long_rows = []
     for row in resp_records[1:]:
         if len(row) < 17:
@@ -819,22 +895,22 @@ def build_admin_exports(resp_records):
         b1_list = row[3:10]
         b2_list = row[10:17]
 
-        for course in b1_list:
+        for pref_num, course in enumerate(b1_list, 1):
             if str(course).strip():
                 long_rows.append({
                     "EmpID": e_id,
                     "Name": e_name,
                     "Designation": e_desig,
-                    "Attribute": "BASKET1",
+                    "Attribute": f"B1P{pref_num}",
                     "Value": str(course).strip(),
                 })
-        for course in b2_list:
+        for pref_num, course in enumerate(b2_list, 1):
             if str(course).strip():
                 long_rows.append({
                     "EmpID": e_id,
                     "Name": e_name,
                     "Designation": e_desig,
-                    "Attribute": "BASKET2",
+                    "Attribute": f"B2P{pref_num}",
                     "Value": str(course).strip(),
                 })
 
@@ -872,7 +948,7 @@ def build_admin_exports(resp_records):
             ws.column_dimensions[col[0].column_letter].width = max_len + 4
 
     excel_buffer.seek(0)
-    return export_df, excel_buffer
+    return excel_buffer
 
 # -----------------------------
 # SIDEBAR: PASSWORD-PROTECTED ADMIN DASHBOARD
@@ -910,23 +986,16 @@ with st.sidebar:
                 else:
                     st.info("All faculty have submitted!")
 
-                # Export Full Responses in Unpivoted / Long Format
+                # Export Full Responses in Unpivoted / Long Excel Format
                 try:
                     resp_records = ss.worksheet("Responses").get_all_values()
                     if len(resp_records) > 1:
-                        export_df, excel_buffer = build_admin_exports(resp_records)
+                        excel_buffer = build_admin_excel(resp_records)
                         st.download_button(
                             "📊 Download Excel (.xlsx)",
                             data=excel_buffer,
                             file_name="winter_2026_2027_responses.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True,
-                        )
-                        st.download_button(
-                            "📥 Download CSV",
-                            data=export_df.to_csv(index=False).encode("utf-8"),
-                            file_name="winter_2026_2027_responses.csv",
-                            mime="text/csv",
                             use_container_width=True,
                         )
                 except Exception as err:
