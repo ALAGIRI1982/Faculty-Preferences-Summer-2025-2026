@@ -153,13 +153,7 @@ SPREADSHEET_ID = "1y1a9UvWW-xrIBR7-hEWn70I7NmsSHpX3AEspg-PLXfg"
 def get_write_lock():
     return threading.Lock()
 
-@st.cache_resource
-def get_form_state():
-    # Shared mutable dict across active sessions for admin open/close control
-    return {"is_open": True}
-
 write_lock = get_write_lock()
-form_state = get_form_state()
 
 @st.cache_resource
 def get_client():
@@ -179,6 +173,34 @@ def get_spreadsheet():
     return client.open_by_key(SPREADSHEET_ID)
 
 ss = get_spreadsheet()
+
+# -----------------------------
+# PERSISTENT PORTAL MODE (GOOGLE SHEETS "Settings" TAB)
+# -----------------------------
+@st.cache_data(ttl=15)
+def get_portal_mode():
+    """Reads OPEN / CLOSED state from Google Sheets 'Settings' tab so it persists across restarts."""
+    try:
+        try:
+            settings_ws = ss.worksheet("Settings")
+        except gspread.WorksheetNotFound:
+            settings_ws = ss.add_worksheet(title="Settings", rows=5, cols=2)
+            settings_ws.update("A1:B1", [["Portal_Mode", "OPEN"]])
+            return True
+        val = settings_ws.acell("B1").value
+        return str(val).strip().upper() != "CLOSED"
+    except Exception:
+        return True
+
+def set_portal_mode(is_open: bool):
+    """Updates OPEN / CLOSED state in Google Sheets 'Settings' tab and clears cache."""
+    mode_str = "OPEN" if is_open else "CLOSED"
+    try:
+        settings_ws = ss.worksheet("Settings")
+    except gspread.WorksheetNotFound:
+        settings_ws = ss.add_worksheet(title="Settings", rows=5, cols=2)
+    settings_ws.update("A1:B1", [["Portal_Mode", mode_str]])
+    get_portal_mode.clear()
 
 # -----------------------------
 # DATA LOADERS (CACHED)
@@ -362,15 +384,33 @@ with st.sidebar:
             if admin_pwd == expected_pwd:
                 st.success("Access Granted")
 
-                # Form Open / Close Toggle
-                new_status = st.toggle("🟢 Accept New Submissions", value=form_state["is_open"])
-                if new_status != form_state["is_open"]:
-                    form_state["is_open"] = new_status
+                # Dynamic Mode Toggle (Accept Preference Mode vs Non-Accept Preference Mode)
+                current_mode_open = get_portal_mode()
+                toggle_label = (
+                    "🟢 Mode: Accept Preference Mode"
+                    if current_mode_open
+                    else "🔴 Mode: Non-Accept Preference Mode"
+                )
+                new_mode_open = st.toggle(
+                    toggle_label,
+                    value=current_mode_open,
+                    key="admin_mode_toggle",
+                )
+
+                if new_mode_open != current_mode_open:
+                    with st.spinner("Updating portal mode..."):
+                        set_portal_mode(new_mode_open)
                     st.rerun()
+
+                if get_portal_mode():
+                    st.success("Status: **ACCEPTING PREFERENCES** (Faculty can submit)")
+                else:
+                    st.error("Status: **NON-ACCEPT MODE** (Form locked; PDF re-download only)")
 
                 if st.button("🔄 Refresh Live Data", use_container_width=True):
                     get_all_responses.clear()
                     load_employees.clear()
+                    get_portal_mode.clear()
                     st.rerun()
 
                 resp_records = get_all_responses()
@@ -454,6 +494,9 @@ def submit_with_retry(emp_id, name, designation, b1, b2):
     max_retries = 3
 
     with write_lock:
+        if not get_portal_mode():
+            return False, "closed", None
+
         for attempt in range(max_retries):
             try:
                 live_ids = [str(x).strip().upper() for x in response_sheet.col_values(1) if x]
@@ -516,6 +559,8 @@ def confirm_submission_dialog(emp_id, name, designation):
                 st.rerun(scope="app")
             elif msg == "duplicate":
                 st.error("🚫 Preferences were already submitted for this Employee ID.")
+            elif msg == "closed":
+                st.error("🔒 Submissions were just closed by the Coordinator.")
             else:
                 st.error(f"Submission failed after retries: {msg}")
 
@@ -555,15 +600,19 @@ def move_item(basket_key, index, direction):
         st.session_state[basket_key] = items
 
 # -----------------------------
-# TITLE & PORTAL STATUS BANNER
+# TITLE & LIVE PORTAL STATUS BANNER
 # -----------------------------
+portal_is_open = get_portal_mode()
+
 st.markdown(
     "<div class='title'>🎓 Faculty Course Preference System Winter 2026-2027</div>",
     unsafe_allow_html=True,
 )
 
-if not form_state["is_open"]:
-    st.warning("🔒 **Preference submission window is currently CLOSED.** You may still enter your Employee ID below to re-download your submitted PDF receipt.")
+if portal_is_open:
+    st.success("🟢 **Accept Preference Mode:** Portal is OPEN for course preference submissions.")
+else:
+    st.error("🔴 **Non-Accept Preference Mode:** Portal is CLOSED for new submissions. Enter your Employee ID below to view or re-download your submitted PDF receipt.")
 
 # -----------------------------
 # STEP 1: EMP INPUT + DETAILS
@@ -644,7 +693,7 @@ if emp_id and not is_just_submitted:
             )
         st.stop()
 
-if not form_state["is_open"]:
+if not portal_is_open:
     st.stop()
 
 st.markdown("<br>", unsafe_allow_html=True)
@@ -857,7 +906,7 @@ with st.container(border=True):
                 data=st.session_state.pdf_buffer,
                 file_name=f"{emp_id}_preferences.pdf",
                 mime="application/pdf",
-            )---------------------------'''
+            )-------------------------'''
 import io
 import threading
 import time
@@ -1553,7 +1602,15 @@ if emp_id and not is_just_submitted:
             )
         st.stop()
 
+# -----------------------------
+# NON-ACCEPT PREFERENCE MODE GUARD (FOR UNSUBMITTED FACULTY)
+# -----------------------------
 if not portal_is_open:
+    if emp_id and name is not None:
+        st.error(
+           "🙏 **Submission Window Closed:** We could not find a recorded preference for your Employee ID, and online submissions are now closed. "
+    "Please contact the **TT Coordinator**, who will be happy to assist you."
+        )
     st.stop()
 
 st.markdown("<br>", unsafe_allow_html=True)
