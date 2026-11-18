@@ -143,7 +143,7 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child d
 )
 
 st.markdown(
-    "<div class='title'>🎓 Faculty Course Preference System Winter 2026-2027</div>",
+    "<div class='title'>🎓 TRA Lab Course Preference System Winter 2026-2027</div>",
     unsafe_allow_html=True,
 )
 
